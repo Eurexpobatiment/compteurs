@@ -138,6 +138,14 @@ table.t tr.dv-lieu td{background:var(--blue-soft);font-weight:600}
 .dv-cat{display:inline-block;padding:1px 6px;border-radius:5px;font-size:11.5px}
 .dv-cat.ELC{background:var(--elc)}.dv-cat.EAU{background:var(--eau)}.dv-cat.GAZ{background:var(--gaz)}
 .dv-cpt select,.dv-cpt .inp{height:32px;font-size:12px;padding:0 6px}.dv-cpt .inp{width:70px}
+
+/* Export index → Drive */
+.ex-box{margin-top:10px;border:1px solid var(--line);border-radius:8px;padding:10px;background:#fff}
+.ex-path{font-size:12.5px;margin-bottom:8px;line-height:1.6}
+.ex-path a{color:var(--blue);text-decoration:none}
+.ex-list{max-height:260px;overflow:auto;border-top:1px solid var(--line)}
+.ex-f{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;padding:9px 6px;cursor:pointer}
+.ex-f:hover{background:var(--blue-soft)}
 </style>
 </head>
 <body>
@@ -154,7 +162,7 @@ table.t tr.dv-lieu td{background:var(--blue-soft);font-weight:600}
   <section class="view" id="v-releve">
     <div class="card mb">
       <div class="row">
-        <div class="field"><label class="f" for="qui">Releveur</label><input type="text" id="qui" placeholder="Nom (Dalkia)" autocomplete="name"></div>
+        <div class="field"><label class="f" for="qui">Releveur</label><input type="text" id="qui" placeholder="Nom (Dalkia / SSIAP)" autocomplete="name"></div>
         <div class="field"><label class="f" for="date">Date du relevé</label><input type="date" id="date"></div>
         <div class="field"><label class="f" for="per">Période (mois de conso)</label><select id="per"></select></div>
       </div>
@@ -176,6 +184,13 @@ table.t tr.dv-lieu td{background:var(--blue-soft);font-weight:600}
   <section class="view" id="v-eau"><div id="eau"></div></section>
   <section class="view" id="v-devis"><div id="devis"></div></section>
   <section class="view" id="v-hist">
+    <div class="card mb">
+      <div class="row" style="align-items:center">
+        <div style="flex:1 1 220px"><h2 style="margin:0 0 2px">Export de tous les index</h2><div class="muted" style="font-size:12px">Fichier Excel (index de tous les compteurs par mois + journal des relevés) enregistré dans le dossier Drive de votre choix.</div></div>
+        <button class="btn sec" id="ex-open">Exporter vers Drive…</button>
+      </div>
+      <div id="ex-pick"></div>
+    </div>
     <div class="card mb"><label class="f" for="hsel">Compteur</label><select id="hsel"></select></div>
     <div id="hist"></div>
   </section>
@@ -237,6 +252,7 @@ function init(){
   $('#per').addEventListener('change', e => changerPeriode(e.target.value));
   $('#btn-refresh').addEventListener('click', charger);
   $('#hsel').addEventListener('change', e => chargerHist(e.target.value));
+  $('#ex-open').addEventListener('click', () => exOuvrir(store.get('rc_dossier') || ''));
   charger();
 }
 function charger(){
@@ -580,6 +596,31 @@ function renderEau(d, root){
   });
   h += '</tbody></table></div></div>';
   root.innerHTML = h;
+}
+
+// ───────────────────────── Export de tous les index vers Drive
+function exOuvrir(id){
+  const z = $('#ex-pick');
+  z.innerHTML = '<div class="empty" style="padding:14px 0"><div class="spin"></div></div>';
+  call('getDossiersDrive', [id || ''], d => { S.exDos = d; exRender(); },
+    e => { if (id) { store.set('rc_dossier', ''); exOuvrir(''); } else z.innerHTML = '<div class="msg err">' + esc(e && e.message || e) + '</div>'; });
+}
+function exRender(){
+  const d = S.exDos, z = $('#ex-pick');
+  z.innerHTML = '<div class="ex-box"><div class="muted" style="font-size:11.5px">Dossier de destination</div><div class="ex-path">'
+    + d.chemin.map((c, i) => i < d.chemin.length - 1 ? '<a href="#" data-id="' + esc(c.id) + '">' + esc(c.nom) + '</a>' : '<b>' + esc(c.nom) + '</b>').join(' › ') + '</div>'
+    + '<div class="ex-list">' + (d.sous.length ? d.sous.map(s => '<button class="ex-f" data-id="' + esc(s.id) + '">📁 ' + esc(s.nom) + '</button>').join('') : '<div class="muted" style="padding:8px 6px;font-size:12.5px">Aucun sous-dossier</div>') + '</div>'
+    + '<div class="dv-act"><button class="btn" id="ex-go">Exporter dans « ' + esc(d.nom) + ' »</button><button class="btn sec" id="ex-x">Annuler</button></div><div id="ex-res"></div></div>';
+  z.querySelectorAll('[data-id]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); exOuvrir(a.dataset.id); }));
+  $('#ex-x').addEventListener('click', () => { z.innerHTML = ''; });
+  $('#ex-go').addEventListener('click', e => {
+    const b = e.currentTarget; b.disabled = true; b.textContent = 'Export en cours…';
+    call('exporterIndex', [d.id], r => {
+      store.set('rc_dossier', d.id);
+      z.innerHTML = '<div class="fb ok dv-ok">✓ <a target="_blank" rel="noopener" href="' + esc(r.url) + '">' + esc(r.nom) + '</a> enregistré dans « ' + esc(r.dossier) + ' » (' + r.compteurs + ' compteurs · ' + r.mois + ' mois)</div>';
+      toast('Export enregistré dans Drive');
+    }, x => { b.disabled = false; b.textContent = 'Exporter dans « ' + d.nom + ' »'; toast('Erreur : ' + (x && x.message || x)); });
+  });
 }
 
 function chargerHist(num){
