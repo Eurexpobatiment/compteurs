@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<rect width="512" height="512" rx="112" fill="#1f5a96"/>
+<g transform="translate(256 256) scale(1) translate(-256 -256)">
+<circle cx="256" cy="236" r="160" fill="#fff"/>
+<path d="M165.9 264.0 A104 104 0 1 1 346.1 264.0" fill="none" stroke="#e4e4e0" stroke-width="18" stroke-linecap="round"/>
+<path d="M165.9 264.0 A104 104 0 0 1 335.7 145.2" fill="none" stroke="#2f74d0" stroke-width="18" stroke-linecap="round"/>
+<line x1="256" y1="212" x2="321.9" y2="156.7" stroke="#1d1d1f" stroke-width="11" stroke-linecap="round"/>
+<circle cx="256" cy="212" r="16" fill="#1d1d1f"/>
+<rect x="178" y="262" width="156" height="50" rx="9" fill="#1d1d1f"/>
+<g font-family="DejaVu Sans Mono, monospace" font-weight="700" font-size="36" fill="#fff" text-anchor="middle">
+<text x="198" y="300">0</text><text x="236" y="300">4</text><text x="274" y="300">2</text></g>
+<rect x="295" y="267" width="34" height="40" rx="5" fill="#c62828"/>
+<text x="312" y="300" font-family="DejaVu Sans Mono, monospace" font-weight="700" font-size="36" fill="#fff" text-anchor="middle">7</text>
+<rect x="120" y="420" width="62" height="20" rx="10" fill="#6fb3ef"/>
+<rect x="192" y="420" width="62" height="20" rx="10" fill="#ffd23f"/>
+<rect x="264" y="420" width="62" height="20" rx="10" fill="#cfcfcb"/>
+<rect x="336" y="420" width="62" height="20" rx="10" fill="#f39a4b"/>
+</g></svg>
