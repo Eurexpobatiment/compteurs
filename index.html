@@ -186,8 +186,8 @@ table.t tr.dv-lieu td{background:var(--blue-soft);font-weight:600}
   <section class="view" id="v-hist">
     <div class="card mb">
       <div class="row" style="align-items:center">
-        <div style="flex:1 1 220px"><h2 style="margin:0 0 2px">Export de tous les index</h2><div class="muted" style="font-size:12px">Fichier Excel (index de tous les compteurs par mois + journal des relevés) enregistré dans le dossier Drive de votre choix.</div></div>
-        <button class="btn sec" id="ex-open">Exporter vers Drive…</button>
+        <div style="flex:1 1 220px"><h2 style="margin:0 0 2px">Export de tous les index</h2><div class="muted" style="font-size:12px">Fichier Excel (index de tous les compteurs par mois + journal des relevés), enregistré à l'emplacement de votre choix.</div></div>
+        <button class="btn sec" id="ex-open">Exporter en Excel…</button>
       </div>
       <div id="ex-pick"></div>
     </div>
@@ -252,7 +252,7 @@ function init(){
   $('#per').addEventListener('change', e => changerPeriode(e.target.value));
   $('#btn-refresh').addEventListener('click', charger);
   $('#hsel').addEventListener('change', e => chargerHist(e.target.value));
-  $('#ex-open').addEventListener('click', () => exOuvrir(store.get('rc_dossier') || ''));
+  $('#ex-open').addEventListener('click', exporterIndex);
   charger();
 }
 function charger(){
@@ -598,29 +598,34 @@ function renderEau(d, root){
   root.innerHTML = h;
 }
 
-// ───────────────────────── Export de tous les index vers Drive
-function exOuvrir(id){
-  const z = $('#ex-pick');
-  z.innerHTML = '<div class="empty" style="padding:14px 0"><div class="spin"></div></div>';
-  call('getDossiersDrive', [id || ''], d => { S.exDos = d; exRender(); },
-    e => { if (id) { store.set('rc_dossier', ''); exOuvrir(''); } else z.innerHTML = '<div class="msg err">' + esc(e && e.message || e) + '</div>'; });
-}
-function exRender(){
-  const d = S.exDos, z = $('#ex-pick');
-  z.innerHTML = '<div class="ex-box"><div class="muted" style="font-size:11.5px">Dossier de destination</div><div class="ex-path">'
-    + d.chemin.map((c, i) => i < d.chemin.length - 1 ? '<a href="#" data-id="' + esc(c.id) + '">' + esc(c.nom) + '</a>' : '<b>' + esc(c.nom) + '</b>').join(' › ') + '</div>'
-    + '<div class="ex-list">' + (d.sous.length ? d.sous.map(s => '<button class="ex-f" data-id="' + esc(s.id) + '">📁 ' + esc(s.nom) + '</button>').join('') : '<div class="muted" style="padding:8px 6px;font-size:12.5px">Aucun sous-dossier</div>') + '</div>'
-    + '<div class="dv-act"><button class="btn" id="ex-go">Exporter dans « ' + esc(d.nom) + ' »</button><button class="btn sec" id="ex-x">Annuler</button></div><div id="ex-res"></div></div>';
-  z.querySelectorAll('[data-id]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); exOuvrir(a.dataset.id); }));
-  $('#ex-x').addEventListener('click', () => { z.innerHTML = ''; });
-  $('#ex-go').addEventListener('click', e => {
-    const b = e.currentTarget; b.disabled = true; b.textContent = 'Export en cours…';
-    call('exporterIndex', [d.id], r => {
-      store.set('rc_dossier', d.id);
-      z.innerHTML = '<div class="fb ok dv-ok">✓ <a target="_blank" rel="noopener" href="' + esc(r.url) + '">' + esc(r.nom) + '</a> enregistré dans « ' + esc(r.dossier) + ' » (' + r.compteurs + ' compteurs · ' + r.mois + ' mois)</div>';
-      toast('Export enregistré dans Drive');
-    }, x => { b.disabled = false; b.textContent = 'Exporter dans « ' + d.nom + ' »'; toast('Erreur : ' + (x && x.message || x)); });
-  });
+// ───────────────────────── Export de tous les index (Excel, emplacement au choix)
+async function exporterIndex(){
+  const b = $('#ex-open'), z = $('#ex-pick');
+  const nom = 'Index compteurs Eurexpo - ' + isoD(new Date()) + '.xlsx';
+  let fh = null;
+  if (window.showSaveFilePicker) {
+    try {
+      fh = await window.showSaveFilePicker({ suggestedName: nom, types: [{ description: 'Classeur Excel', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }] });
+    } catch (e) { if (e && e.name === 'AbortError') return; fh = null; }
+  }
+  b.disabled = true; b.textContent = 'Export en cours…'; z.innerHTML = '';
+  const fin = () => { b.disabled = false; b.textContent = 'Exporter en Excel…'; };
+  call('exporterIndex', [], async r => {
+    try {
+      const bin = atob(r.b64), u = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+      const blob = new Blob([u], { type: r.mime });
+      if (fh) { const w = await fh.createWritable(); await w.write(blob); await w.close(); }
+      else {
+        const url = URL.createObjectURL(blob), a = document.createElement('a');
+        a.href = url; a.download = nom; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+      }
+      z.innerHTML = '<div class="fb ok dv-ok">✓ ' + esc(fh ? fh.name : nom) + ' enregistré (' + r.compteurs + ' compteurs · ' + r.mois + ' mois)</div>';
+      toast('Export Excel enregistré');
+    } catch (e) { toast('Erreur : ' + (e && e.message || e)); }
+    fin();
+  }, x => { fin(); toast('Erreur : ' + (x && x.message || x)); });
 }
 
 function chargerHist(num){
