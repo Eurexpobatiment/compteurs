@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<title>Relevés compteurs – Eurexpo</title>
+<meta name="theme-color" content="#f3f3f1">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{
+  --bg:#f3f3f1; --card:#fbfbfa; --line:#e4e4e0; --ink:#1d1d1f; --muted:#6b6b70;
+  --blue:#2f74d0; --blue-soft:#e8f0fb; --green:#2e7d32; --green-soft:#e7f3e8;
+  --amber:#8a5a00; --amber-soft:#fbf0d9; --red:#c62828; --red-soft:#fdecea; --grey-bar:#cfcfcf;
+  --eau:#dcebfb; --elc:#fff4c7; --gaz:#e7e7e7; --fuel:#fde2cc;
+  --radius:10px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;-webkit-text-size-adjust:100%}
+button,input,select{font:inherit;color:inherit}
+.top{position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;padding:8px 16px;height:52px}
+.top img{height:28px;display:block}
+.logo-txt{display:flex;align-items:center;gap:8px;line-height:1}
+.logo-txt .lyon{display:flex;align-items:flex-end;gap:2px;font-weight:300;font-size:19px;letter-spacing:-.5px}
+.logo-txt .lyon i{display:inline-block;width:11px;height:11px;background:#e30613;margin-right:2px;margin-bottom:3px}
+.logo-txt .sep{width:1px;height:24px;background:#9a9a9a}
+.logo-txt .eur{font-size:10px;line-height:1.1;font-weight:500}
+.top h1{font-size:15px;margin:0;font-weight:700;white-space:nowrap}
+.top h1 small{font-weight:400;color:var(--muted);font-size:11px}
+.top .sp{flex:1}
+.icon-btn{border:1px solid var(--line);background:#fff;border-radius:8px;width:32px;height:30px;display:grid;place-items:center;cursor:pointer}
+main{max-width:880px;margin:0 auto;padding:12px 16px 90px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 12px}
+.mb{margin-bottom:10px}
+label.f{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+.field{display:flex;flex-direction:column}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.row > .field{flex:1 1 150px}
+input[type=text],input[type=date],input[type=search],select,.inp{height:38px;border:1px solid #cfcfcb;border-radius:8px;background:#fff;padding:0 10px;width:100%}
+input:focus,select:focus{outline:2px solid var(--blue);outline-offset:-1px;border-color:var(--blue)}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+.kpi span{display:block;font-size:11px;color:var(--muted)}
+.kpi b{font-size:14px}
+.kpis.big .kpi{padding:10px 12px}
+.kpis.big .kpi b{font-size:22px;display:block}
+.sect{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:8px;overflow:hidden}
+.sect > summary{list-style:none;display:flex;align-items:center;gap:10px;padding:11px 12px;cursor:pointer;font-weight:600}
+.sect > summary::-webkit-details-marker{display:none}
+.sect > summary .chev{color:var(--muted);font-size:11px;transition:transform .15s;width:10px}
+.sect[open] > summary .chev{transform:rotate(90deg)}
+.sect > summary .cnt{margin-left:auto;font-size:12px;color:var(--muted);font-weight:500}
+.bar{width:58px;height:5px;border-radius:3px;background:#e2e2de;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--green);border-radius:3px}
+.cpt{border-top:1px solid var(--line);padding:10px 12px 12px;border-left:3px solid transparent}
+.cpt.done{border-left-color:var(--green)}
+.cpt.warn{border-left-color:#e0a100}
+.cpt.err{border-left-color:var(--red)}
+.cpt h3{font-size:14px;margin:0 0 1px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.chip{font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;letter-spacing:.3px}
+.chip.EAU{background:var(--eau)}.chip.ELC{background:var(--elc)}.chip.GAZ{background:var(--gaz)}.chip.FUEL{background:var(--fuel)}
+.num{font-size:11px;color:var(--muted);font-weight:500}
+.loc{font-size:12px;color:var(--muted);margin-bottom:6px}
+.prev{font-size:12px;color:var(--muted);margin-bottom:6px}
+.prev b{color:var(--ink);font-weight:600}
+.saisie{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+.saisie .idx{width:160px;text-align:right;font-size:17px;font-variant-numeric:tabular-nums;height:42px}
+.saisie select{width:auto;min-width:120px;height:42px}
+.saisie .com{flex:1 1 200px;height:42px}
+.btn{height:42px;border:0;border-radius:8px;background:var(--blue);color:#fff;padding:0 16px;font-weight:600;cursor:pointer}
+.btn.sec{background:#fff;color:var(--ink);border:1px solid #cfcfcb}
+.btn.warn{background:#e0a100}
+.btn:disabled{opacity:.5;cursor:default}
+.fb{font-size:12px;margin-top:6px;padding-left:2px}
+.fb.ok{color:var(--green)} .fb.warn{color:var(--amber)} .fb.err{color:var(--red)}
+.msg{font-size:12.5px;margin-top:8px;padding:8px 10px;border-radius:8px}
+.msg.warn{background:var(--amber-soft);color:var(--amber)} .msg.err{background:var(--red-soft);color:var(--red)}
+.msg .btn{height:32px;margin-top:6px;padding:0 12px;font-size:12.5px}
+.saved{font-size:12px;color:var(--green);margin-left:4px}
+.anc{width:160px}
+.banner{background:var(--amber-soft);border-radius:8px;padding:9px 12px;margin-bottom:10px;color:var(--amber)}
+.banner summary{cursor:pointer;font-weight:600;list-style:none}
+.banner summary::-webkit-details-marker{display:none}
+.banner summary span{font-weight:400}
+.alert{padding:8px 0;border-top:1px solid #efdcb4;font-size:13px;color:var(--ink)}
+.alert:first-of-type{border-top:0}
+.alert b{display:block}
+.lvl{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.lvl.haute{background:var(--red)}.lvl.moyenne{background:#e0a100}.lvl.info{background:#9aa0a6}
+.chart h2,.card h2{font-size:14px;margin:0 0 6px}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-bottom:8px;flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.hb{display:grid;grid-template-columns:78px 1fr 62px;align-items:center;gap:8px;font-size:12px;padding:2px 0}
+.hb .lbl{text-align:right;color:#444}
+.hb .val{color:var(--muted);font-variant-numeric:tabular-nums}
+.hb .bars{display:flex;flex-direction:column;gap:2px}
+.hb .b1{height:9px;background:var(--blue);border-radius:2px}
+.hb .b2{height:5px;background:var(--grey-bar);border-radius:2px}
+table.t{width:100%;border-collapse:collapse;font-size:12.5px}
+table.t th{text-align:left;font-weight:600;color:var(--muted);font-size:11.5px;padding:6px 6px;border-bottom:1px solid var(--line)}
+table.t td{padding:7px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+table.t td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+table.t tr.hl td{background:var(--amber-soft)}
+.spark{display:inline-flex;align-items:flex-end;gap:1px;height:18px}
+.spark i{width:4px;background:var(--blue);border-radius:1px;min-height:1px;opacity:.75}
+.tag{font-size:10.5px;padding:1px 6px;border-radius:10px;background:var(--red-soft);color:var(--red);font-weight:600;white-space:nowrap}
+.tag.m{background:var(--amber-soft);color:var(--amber)}
+.muted{color:var(--muted)}
+.empty{color:var(--muted);text-align:center;padding:30px 0}
+.scroll{overflow-x:auto}
+nav.tabs{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;z-index:30;padding-bottom:env(safe-area-inset-bottom)}
+nav.tabs button{flex:1;border:0;background:none;padding:8px 0 7px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--muted);cursor:pointer}
+nav.tabs button svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6}
+nav.tabs button.on{color:var(--blue)}
+.view{display:none}.view.on{display:block}
+.loading{display:grid;place-items:center;height:60vh;color:var(--muted)}
+.spin{width:22px;height:22px;border:2px solid #d5d5d5;border-top-color:var(--blue);border-radius:50%;animation:s 0.8s linear infinite;margin:0 auto 8px}
+@keyframes s{to{transform:rotate(360deg)}}
+.toast{position:fixed;left:50%;bottom:76px;transform:translateX(-50%);background:#1d1d1f;color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .2s;z-index:50;pointer-events:none;max-width:90vw}
+.toast.on{opacity:1}
+@media (max-width:600px){
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .top h1 small{display:none}
+  .saisie .idx{width:100%;flex:1 1 140px}
+  .saisie select{flex:1 1 120px}
+  .hide-sm{display:none}
+  .hb{grid-template-columns:62px 1fr 54px}
+}
+
+/* Devis */
+.dv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.dv-u{display:flex;align-items:center;gap:6px}.dv-u .inp{width:100%;min-width:0}
+.dv-u span{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.dv-der{margin-top:10px;font-size:12.5px}
+.dv-act{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+a.btn.dv-a{display:inline-flex;align-items:center;text-decoration:none}
+.dv-ok{margin-top:12px}
+.card h2.dv-h3{margin:16px 0 8px;font-size:13px}
+table.t tr.dv-lieu td{background:var(--blue-soft);font-weight:600}
+.dv-cat{display:inline-block;padding:1px 6px;border-radius:5px;font-size:11.5px}
+.dv-cat.ELC{background:var(--elc)}.dv-cat.EAU{background:var(--eau)}.dv-cat.GAZ{background:var(--gaz)}
+.dv-cpt select,.dv-cpt .inp{height:32px;font-size:12px;padding:0 6px}.dv-cpt .inp{width:70px}
+</style>
+</head>
+<body>
+<header class="top">
+  <img src="data:image/png;base64,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" alt="GL events Lyon · Eurexpo Lyon">
+  <h1>Relevés compteurs <small id="hdr-per"></small></h1>
+  <div class="sp"></div>
+  <button class="icon-btn" id="btn-refresh" title="Actualiser" aria-label="Actualiser">↻</button>
+</header>
+
+<main>
+  <div id="loading" class="loading"><div><div class="spin"></div>Chargement…</div></div>
+
+  <section class="view" id="v-releve">
+    <div class="card mb">
+      <div class="row">
+        <div class="field"><label class="f" for="qui">Releveur</label><input type="text" id="qui" placeholder="Nom (Dalkia)" autocomplete="name"></div>
+        <div class="field"><label class="f" for="date">Date du relevé</label><input type="date" id="date"></div>
+        <div class="field"><label class="f" for="per">Période (mois de conso)</label><select id="per"></select></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div class="field"><label class="f" for="filtre">Affichage</label>
+          <select id="filtre">
+            <option value="reste">Restant à relever</option><option value="tous">Toutes les lignes</option>
+            <option value="EAU">Eau</option><option value="ELC">Électricité</option><option value="GAZ">Gaz</option><option value="FUEL">Fioul</option>
+            <option value="alerte">Avec alerte</option>
+          </select></div>
+        <div class="field" style="flex:2 1 220px"><label class="f" for="q">Rechercher</label><input type="search" id="q" placeholder="N°, nom, local…"></div>
+      </div>
+    </div>
+    <div class="kpis" id="kpis"></div>
+    <div id="sects"></div>
+  </section>
+
+  <section class="view" id="v-ctrl"><div id="ctrl"></div></section>
+  <section class="view" id="v-eau"><div id="eau"></div></section>
+  <section class="view" id="v-devis"><div id="devis"></div></section>
+  <section class="view" id="v-hist">
+    <div class="card mb"><label class="f" for="hsel">Compteur</label><select id="hsel"></select></div>
+    <div id="hist"></div>
+  </section>
+</main>
+
+<nav class="tabs">
+  <button data-v="releve" class="on"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg>Relevé</button>
+  <button data-v="ctrl"><svg viewBox="0 0 24 24"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.5"/></svg>Contrôles</button>
+  <button data-v="eau"><svg viewBox="0 0 24 24"><path d="M12 3c3.5 4.5 6 7.6 6 11a6 6 0 0 1-12 0c0-3.4 2.5-6.5 6-11z"/></svg>Eau</button>
+  <button data-v="devis"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg>Devis</button>
+  <button data-v="hist"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Historique</button>
+</nav>
+<div class="toast" id="toast"></div>
+<script>
+(function(){
+'use strict';
+const $ = s => document.querySelector(s);
+const S = { per: '', compteurs: [], secteurs: [], ouverts: {}, filtre: 'reste', q: '', eau: null, ctrl: null, pending: {} };
+const MOIS = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+const MOIS_L = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fr = (x, d) => x == null || x === '' ? '–' : Number(x).toLocaleString('fr-FR', { maximumFractionDigits: d == null ? 2 : d });
+const pd = s => { const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(+m[1], +m[2]-1, +m[3]) : null; };
+const isoD = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+const moisC = s => { const d = pd(s); return d ? MOIS[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2) : ''; };
+const moisL = s => { const d = pd(s); return d ? MOIS_L[d.getMonth()] + ' ' + d.getFullYear() : ''; };
+const jour = s => { const d = pd(s); return d ? String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getFullYear()).slice(2) : ''; };
+const nombre = v => { const s = String(v == null ? '' : v).replace(/[\s  ]/g,'').replace(',', '.'); return /^\d+(\.\d+)?$/.test(s) ? Number(s) : null; };
+const store = { get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }, set(k,v){ try { localStorage.setItem(k,v); } catch(e){} } };
+let tt; function toast(m){ const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('on'), 2600); }
+const API = "https://script.google.com/macros/s/AKfycbwuL9955qHZxwgy1Q3HQ7IiJbqmKifxTmIbwQi0jBAtIv6w_LfJe0jfJR1SsKdrxJm3/exec";
+function call(fn, args, ok, ko){
+  const fail = ko || (x => toast('Erreur : ' + (x && x.message || x)));
+  fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: fn, args: args || [] }) })
+    .then(r => r.json())
+    .then(r => { if (r && r.ok) { if (ok) ok(r.data); } else fail(new Error(r && r.error || 'Réponse invalide du serveur')); })
+    .catch(e => fail(new Error('Connexion au serveur impossible (' + (e && e.message || e) + ')')));
+}
+
+document.querySelectorAll('nav.tabs button').forEach(b => b.addEventListener('click', () => show(b.dataset.v)));
+function show(v){
+  document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  document.querySelectorAll('.view').forEach(x => x.classList.toggle('on', x.id === 'v-' + v));
+  store.set('rc_vue', v);
+  if (v === 'eau' && !S.eau) chargerEau();
+  if (v === 'devis' && !S.devis) chargerDevis();
+  if (v === 'ctrl') chargerCtrl();
+  if (v === 'hist' && !$('#hist').innerHTML) chargerHist();
+  window.scrollTo(0, 0);
+}
+
+function init(){
+  $('#qui').value = store.get('rc_qui') || '';
+  $('#qui').addEventListener('change', e => store.set('rc_qui', e.target.value.trim()));
+  $('#filtre').value = store.get('rc_filtre') || 'reste'; S.filtre = $('#filtre').value;
+  $('#filtre').addEventListener('change', e => { S.filtre = e.target.value; store.set('rc_filtre', S.filtre); renderReleve(); });
+  $('#q').addEventListener('input', e => { S.q = e.target.value.trim().toLowerCase(); renderReleve(); });
+  $('#per').addEventListener('change', e => changerPeriode(e.target.value));
+  $('#btn-refresh').addEventListener('click', charger);
+  $('#hsel').addEventListener('change', e => chargerHist(e.target.value));
+  charger();
+}
+function charger(){
+  $('#loading').style.display = 'grid';
+  S.eau = null;
+  call('getInit', [], d => {
+    $('#loading').style.display = 'none';
+    S.per = d.periode; S.compteurs = d.compteurs; S.secteurs = d.secteurs;
+    if (d.secteurs.length && !Object.keys(S.ouverts).length) S.ouverts[d.secteurs[0]] = true;
+    $('#date').value = d.aujourdhui; $('#date').max = d.aujourdhui;
+    const p0 = pd(d.periode), opts = [];
+    for (let i = 0; i < 4; i++) { const x = new Date(p0.getFullYear(), p0.getMonth() - i, 1); opts.push(isoD(x)); }
+    $('#per').innerHTML = opts.map(o => '<option value="' + o + '">' + moisL(o) + '</option>').join('');
+    $('#per').value = d.periode;
+    $('#hsel').innerHTML = '<option value="">— choisir —</option>' + S.compteurs.slice().sort((a,b) => a.ordre - b.ordre)
+      .map(c => '<option value="' + esc(c.num) + '">' + esc(c.num + ' · ' + c.designation + ' – ' + c.localisation) + '</option>').join('');
+    renderReleve();
+    show(store.get('rc_vue') || 'releve');
+  }, e => { $('#loading').innerHTML = '<div class="empty">Impossible de charger les données.<br>' + esc(e && e.message || e) + '</div>'; });
+}
+function changerPeriode(per){
+  S.per = per;
+  $('#sects').innerHTML = '<div class="empty"><div class="spin"></div></div>';
+  call('getPeriode', [per], cpts => { S.compteurs = cpts; renderReleve(); });
+}
+
+function etat(c){
+  if (c.cur && (c.cur.index != null || c.cur.statut)) return c.cur.ctrl && /baisse|suspect|Saut anormal/.test(c.cur.ctrl) ? 'warn' : 'done';
+  return '';
+}
+function visible(c){
+  if (S.q) {
+    const h = (c.num + ' ' + c.designation + ' ' + c.localisation + ' ' + c.secteur).toLowerCase();
+    if (h.indexOf(S.q) < 0) return false;
+  }
+  const f = S.filtre;
+  if (f === 'reste') return !c.cur || S.pending[c.num];
+  if (f === 'alerte') return !!(c.cur && c.cur.ctrl) || !!S.pending[c.num];
+  if (f === 'tous') return true;
+  return c.type === f;
+}
+function renderReleve(){
+  $('#hdr-per').textContent = '· ' + moisL(S.per);
+  const tot = n => S.compteurs.filter(n).length;
+  const fait = n => S.compteurs.filter(c => n(c) && c.cur).length;
+  const kp = [['Relevés', () => true], ['Eau', c => c.type === 'EAU'], ['Électricité', c => c.type === 'ELC'], ['Gaz / fioul', c => c.type === 'GAZ' || c.type === 'FUEL']];
+  $('#kpis').innerHTML = kp.map(k => '<div class="kpi"><span>' + k[0] + '</span><b>' + fait(k[1]) + ' / ' + tot(k[1]) + '</b></div>').join('');
+  const html = S.secteurs.map(s => {
+    const all = S.compteurs.filter(c => c.secteur === s).sort((a,b) => a.ordre - b.ordre);
+    const vis = all.filter(visible);
+    if (!vis.length) return '';
+    const done = all.filter(c => c.cur).length, pct = Math.round(done / all.length * 100);
+    const open = S.ouverts[s] || S.q ? ' open' : '';
+    return '<details class="sect"' + open + ' data-s="' + esc(s) + '"><summary><span class="chev">›</span>' + esc(s)
+      + '<span class="cnt">' + done + '/' + all.length + '</span><span class="bar"><i style="width:' + pct + '%"></i></span></summary>'
+      + vis.map(rowCpt).join('') + '</details>';
+  }).join('');
+  $('#sects').innerHTML = html || '<div class="card empty">' + (S.filtre === 'reste' ? '✓ Tous les compteurs sont relevés pour ' + moisL(S.per) + '.' : 'Aucun compteur.') + '</div>';
+  document.querySelectorAll('details.sect').forEach(d => d.addEventListener('toggle', () => { S.ouverts[d.dataset.s] = d.open; }));
+  document.querySelectorAll('.cpt').forEach(bind);
+}
+function rowCpt(c){
+  const cur = c.cur || {};
+  const st = cur.statut || 'OK';
+  const prev = c.prevIndex != null
+    ? 'Précédent : <b>' + fr(c.prevIndex) + ' ' + esc(c.unite) + '</b> (' + jour(c.prevDate) + ')' + (c.ref != null ? ' · habituel ≈ ' + fr(c.ref, 0) + ' ' + esc(c.unite) + '/mois' : '')
+    : '<span>Pas d\'index précédent</span>';
+  const opts = ['OK','HS','Travaux','Arrêt','Non relevé','Changement compteur'].map(o => '<option' + (o === st ? ' selected' : '') + '>' + o + '</option>').join('');
+  const val = cur.index != null ? String(cur.index).replace('.', ',') : '';
+  return '<div class="cpt ' + etat(c) + '" data-num="' + esc(c.num) + '">'
+    + '<h3>' + esc(c.designation) + ' <span class="chip ' + esc(c.type) + '">' + esc(c.type) + '</span> <span class="num">n° ' + esc(c.num) + '</span>'
+    + (cur.statut ? '<span class="saved">✓ ' + (cur.index != null ? fr(cur.index) : esc(cur.statut)) + '</span>' : '') + '</h3>'
+    + '<div class="loc">' + esc(c.localisation) + (c.remarque ? ' · ' + esc(c.remarque) : '') + '</div>'
+    + '<div class="prev">' + prev + '</div>'
+    + '<div class="saisie">'
+    +   '<input class="inp idx" inputmode="decimal" autocomplete="off" placeholder="Index" value="' + esc(val) + '" aria-label="Index">'
+    +   '<input class="inp anc" inputmode="decimal" placeholder="Index final ancien" style="display:' + (st === 'Changement compteur' ? 'block' : 'none') + '" value="' + esc(cur.ancien != null ? cur.ancien : '') + '">'
+    +   '<select class="st" aria-label="Statut">' + opts + '</select>'
+    +   '<input class="inp com" placeholder="Commentaire (optionnel)" value="' + esc(cur.com || '') + '">'
+    +   '<button class="btn sv">' + (c.cur ? 'Modifier' : 'Valider') + '</button>'
+    + '</div><div class="fb"></div><div class="zone-msg"></div></div>';
+}
+function bind(el){
+  const c = S.compteurs.find(x => x.num === el.dataset.num);
+  const idx = el.querySelector('.idx'), st = el.querySelector('.st'), anc = el.querySelector('.anc'), fb = el.querySelector('.fb');
+  const sansIndex = () => ['HS','Travaux','Arrêt','Non relevé'].indexOf(st.value) >= 0;
+  const maj = () => {
+    idx.value = idx.value.replace(/[^\d\s,.]/g, '');
+    anc.style.display = st.value === 'Changement compteur' ? 'block' : 'none';
+    idx.disabled = sansIndex();
+    fb.className = 'fb'; fb.textContent = '';
+    if (sansIndex() || !idx.value) return;
+    const v = nombre(idx.value);
+    if (v === null) { fb.className = 'fb err'; fb.textContent = 'Format invalide : chiffres uniquement (virgule pour les décimales).'; return; }
+    if (c.prevIndex == null || c.unite === '%' || st.value === 'Changement compteur') return;
+    const d = v - c.prevIndex;
+    if (d < 0) { fb.className = 'fb err'; fb.textContent = 'Inférieur à l\'index précédent (' + fr(c.prevIndex) + ') : vérifier la saisie.'; return; }
+    const r = c.ref;
+    if (r != null && d > 3 * r && d - r > ({EAU:5,GAZ:50,ELC:200,FUEL:100}[c.type] || 0)) {
+      fb.className = 'fb warn'; fb.textContent = 'Conso ' + fr(d) + ' ' + c.unite + ' : ' + (r ? '×' + fr(d / r, 1) + ' par rapport à l\'habitude' : 'inhabituelle') + '. Vérifier l\'index.';
+    } else { fb.className = 'fb ok'; fb.textContent = 'Conso : ' + fr(d) + ' ' + c.unite; }
+  };
+  idx.addEventListener('input', maj); st.addEventListener('change', maj); maj();
+  idx.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); envoyer(el, c, false); } });
+  el.querySelector('.sv').addEventListener('click', () => envoyer(el, c, false));
+}
+function envoyer(el, c, confirme){
+  const qui = $('#qui').value.trim();
+  if (!qui) { toast('Indiquez votre nom en haut de l\'écran.'); $('#qui').focus(); return; }
+  store.set('rc_qui', qui);
+  const p = { num: c.num, date: $('#date').value, periode: S.per, index: el.querySelector('.idx').value,
+              statut: el.querySelector('.st').value, commentaire: el.querySelector('.com').value,
+              releveur: qui, confirme: !!confirme, ancien: el.querySelector('.anc').value };
+  const btn = el.querySelector('.sv'); btn.disabled = true; btn.textContent = '…';
+  const zm = el.querySelector('.zone-msg'); zm.innerHTML = '';
+  S.pending[c.num] = true;
+  call('saveReleve', [p], r => {
+    btn.disabled = false;
+    if (r.ok) {
+      delete S.pending[c.num];
+      const i = S.compteurs.findIndex(x => x.num === c.num); S.compteurs[i] = r.compteur;
+      toast('✓ n° ' + c.num + ' enregistré' + (r.compteur.cur && r.compteur.cur.conso != null ? ' · conso ' + fr(r.compteur.cur.conso) + ' ' + c.unite : ''));
+      const next = suivant(el);
+      renderReleve();
+      if (next) { const n = document.querySelector('.cpt[data-num="' + CSS.escape(next) + '"] .idx'); if (n && !n.disabled) n.focus({ preventScroll: false }); }
+    } else {
+      btn.textContent = c.cur ? 'Modifier' : 'Valider';
+      el.classList.remove('done'); el.classList.add(r.code === 'SAUT' ? 'warn' : 'err');
+      if (r.code === 'SAUT') {
+        zm.innerHTML = '<div class="msg warn">' + esc(r.message) + '<br><button class="btn warn cf">Je confirme cet index</button></div>';
+        zm.querySelector('.cf').addEventListener('click', () => envoyer(el, c, true));
+      } else {
+        zm.innerHTML = '<div class="msg err">' + esc(r.message) + '</div>';
+      }
+    }
+  }, e => { btn.disabled = false; btn.textContent = 'Valider'; zm.innerHTML = '<div class="msg err">Échec de l\'enregistrement (réseau ?). Réessayer.</div>'; });
+}
+function suivant(el){
+  const all = Array.from(document.querySelectorAll('.cpt')); const i = all.indexOf(el);
+  for (let k = i + 1; k < all.length; k++) { const n = all[k].dataset.num; const c = S.compteurs.find(x => x.num === n); if (c && !c.cur) return n; }
+  return null;
+}
+
+function chargerCtrl(){
+  $('#ctrl').innerHTML = '<div class="empty"><div class="spin"></div></div>';
+  call('getControles', [S.per], d => {
+    S.ctrl = d;
+    const lig = (x, extra) => '<tr><td>' + esc(x.num) + '</td><td>' + esc(x.designation) + '<div class="muted" style="font-size:11.5px">' + esc(extra || '') + '</div></td>';
+    let h = '<div class="kpis big"><div class="kpi"><span>Non relevés · ' + esc(moisL(d.periode)) + '</span><b>' + d.manquants.length + '</b></div>'
+      + '<div class="kpi"><span>Relevés sans index</span><b>' + d.nonReleves.length + '</b></div>'
+      + '<div class="kpi"><span>Relevés signalés</span><b>' + d.signales.length + '</b></div><div class="kpi hide-sm" style="visibility:hidden"></div></div>';
+    if (d.manquants.length) {
+      h += '<details class="sect mb"><summary><span class="chev">›</span>Restant à relever<span class="cnt">' + d.manquants.length + '</span></summary><div class="scroll" style="padding:0 12px 8px"><table class="t"><tbody>'
+        + d.manquants.map(x => lig(x, x.secteur) + '<td><span class="chip ' + esc(x.type) + '">' + esc(x.type) + '</span></td></tr>').join('') + '</tbody></table></div></details>';
+    }
+    if (d.nonReleves.length) {
+      h += '<details class="sect mb"><summary><span class="chev">›</span>Compteurs non relevables ce mois<span class="cnt">' + d.nonReleves.length + '</span></summary><div class="scroll" style="padding:0 12px 8px"><table class="t"><tbody>'
+        + d.nonReleves.map(x => lig(x, x.com) + '<td><span class="tag m">' + esc(x.statut) + '</span></td></tr>').join('') + '</tbody></table></div></details>';
+    }
+    h += '<div class="card"><h2>Relevés signalés (les plus récents)</h2><div class="scroll"><table class="t"><thead><tr><th>N°</th><th>Compteur</th><th>Mois</th><th class="n">Index</th><th>Contrôle</th></tr></thead><tbody>'
+      + (d.signales.length ? d.signales.map(x => '<tr><td>' + esc(x.num) + '</td><td>' + esc(x.designation) + '<div class="muted" style="font-size:11.5px">' + esc(x.localisation) + '</div></td><td>' + moisC(x.per) + '</td><td class="n">' + fr(x.index) + '</td><td><span class="tag' + (/confirmé/i.test(x.ctrl) ? ' m' : '') + '">' + esc(x.ctrl) + '</span></td></tr>').join('')
+        : '<tr><td colspan="5" class="empty">Aucun relevé signalé.</td></tr>')
+      + '</tbody></table></div><p class="muted" style="font-size:12px;margin:8px 0 0">Corriger l\'index dans l\'onglet Relevés du classeur, puis menu Relevés › Recalculer.</p></div>';
+    $('#ctrl').innerHTML = h;
+  });
+}
+
+// ───────────────────────── Devis
+function chargerDevis(){
+  $('#devis').innerHTML = '<div class="empty"><div class="spin"></div></div>';
+  call('getDevisInit', [], d => { S.devis = d; renderDevis(); });
+}
+function dvEur(x, d){ return x == null ? '–' : Number(x).toLocaleString('fr-FR', { minimumFractionDigits: d == null ? 2 : d, maximumFractionDigits: d == null ? 2 : d }) + ' €'; }
+function dvTarifsForm(){
+  const t = {};
+  S.devis.tarifsDef.forEach(x => { const v = String($('#dv-' + x.k).value).replace(',', '.'); t[x.k] = v === '' ? '' : Number(v); });
+  return t;
+}
+function dvDerives(){
+  const t = dvTarifsForm();
+  $('#dv-der').innerHTML = 'Eau froide adoucie : <b>' + dvEur(t.eau * t.coefAdoucie, 3) + '</b>/m³ · Eau chaude adoucie : <b>' + dvEur(t.eau * t.coefChaude, 3)
+    + '</b>/m³ · Gaz ≈ <b>' + dvEur(t.gaz * t.convGaz, 3) + '</b>/m³';
+}
+function dvRemplirTarifs(){
+  const t = S.devis.tarifs[$('#dv-cli').value] || {};
+  S.devis.tarifsDef.forEach(x => { $('#dv-' + x.k).value = t[x.k] == null ? '' : t[x.k]; });
+  $('#dv-t-cli').textContent = $('#dv-cli').value;
+  $('#dv-prev').innerHTML = ''; $('#dv-res').innerHTML = '';
+  dvDerives();
+}
+function renderDevis(){
+  const d = S.devis;
+  const step = k => /coef|conv/.test(k) ? '0.01' : (k === 'tva' ? '0.1' : '0.0001');
+  let h = '<div class="card mb"><h2>Nouveau devis</h2><div class="row">'
+    + '<div class="field"><label class="f" for="dv-cli">Client</label><select id="dv-cli">' + d.clients.map(c => '<option>' + esc(c) + '</option>').join('') + '</select></div>'
+    + '<div class="field"><label class="f" for="dv-per">Période</label><select id="dv-per">'
+    + (d.periodes.length ? d.periodes.map(p => '<option value="' + p.iso + '">' + esc(p.lbl) + '</option>').join('') : '<option value="">Aucun relevé</option>') + '</select></div>'
+    + '</div><h2 class="dv-h3">Tarifs <span id="dv-t-cli"></span></h2><div class="dv-grid">'
+    + d.tarifsDef.map(x => '<div class="field"><label class="f" for="dv-' + x.k + '">' + esc(x.lbl) + '</label><div class="dv-u">'
+      + '<input class="inp" type="number" inputmode="decimal" min="0" step="' + step(x.k) + '" id="dv-' + x.k + '"><span>' + esc(x.unite) + '</span></div></div>').join('')
+    + '</div><div class="muted dv-der" id="dv-der"></div>'
+    + '<div class="dv-act"><button class="btn sec" id="dv-save-t">Enregistrer ces tarifs pour ce client</button></div>'
+    + '<div class="field" style="margin-top:14px"><label class="f" for="dv-obj">Objet (facultatif)</label><input type="text" id="dv-obj" placeholder="Refacturation des consommations d\'énergie et de fluides – mois"></div>'
+    + '<div class="dv-act"><button class="btn sec" id="dv-ap">Aperçu</button><button class="btn" id="dv-gen">Éditer le devis (PDF + Excel)</button></div>'
+    + '<div id="dv-res"></div><div id="dv-prev"></div></div>';
+
+  h += '<details class="sect card mb"><summary>Compteurs facturés <span class="cnt">' + d.compteurs.filter(c => c.facture).length + ' / ' + d.compteurs.length + '</span><span class="chev">›</span></summary>'
+    + '<div class="scroll"><table class="t dv-cpt"><thead><tr><th>N°</th><th>Lieu</th><th>Catégorie</th><th>Client</th><th>Coef.</th><th>Facturé</th></tr></thead><tbody>'
+    + d.compteurs.map(c => '<tr data-num="' + esc(c.num) + '"><td>' + esc(c.num) + '</td><td>' + esc(c.lieu) + (c.remarque ? '<div class="muted">' + esc(c.remarque) + '</div>' : '') + '</td>'
+      + '<td><select class="dv-c-cat">' + d.cats.map(x => '<option' + (x === c.cat ? ' selected' : '') + '>' + x + '</option>').join('') + '</select></td>'
+      + '<td><select class="dv-c-cli">' + d.clients.map(x => '<option' + (x === c.client ? ' selected' : '') + '>' + esc(x) + '</option>').join('') + '</select></td>'
+      + '<td><input class="inp dv-c-coef" type="number" step="0.01" min="0" inputmode="decimal" value="' + esc(c.coef) + '"></td>'
+      + '<td style="text-align:center"><input type="checkbox" class="dv-c-fac"' + (c.facture ? ' checked' : '') + '></td></tr>').join('')
+    + '</tbody></table></div><div class="dv-act"><button class="btn sec" id="dv-save-c">Enregistrer les compteurs</button></div></details>';
+
+  h += '<div class="card mb"><h2>Devis édités</h2><div id="dv-hist"></div><div class="dv-act"><button class="btn sec" id="dv-purge">Purger les devis</button></div></div>';
+  $('#devis').innerHTML = h;
+  renderDevisHist();
+  $('#dv-purge').addEventListener('click', e => {
+    if (!confirm('Supprimer tous les devis édités ?\n\nLe registre est vidé (la numérotation repart à 001) et les anciens PDF / Excel éventuellement restés dans Drive sont mis à la corbeille.')) return;
+    const b = e.currentTarget; b.disabled = true; b.textContent = 'Purge en cours…';
+    call('purgerDevis', [], msg => { S.devis.historique = []; renderDevisHist(); b.disabled = false; b.textContent = 'Purger les devis'; toast(msg); },
+      x => { b.disabled = false; b.textContent = 'Purger les devis'; toast('Erreur : ' + (x && x.message || x)); });
+  });
+  dvRemplirTarifs();
+  $('#dv-cli').addEventListener('change', dvRemplirTarifs);
+  $('#dv-per').addEventListener('change', () => { $('#dv-prev').innerHTML = ''; $('#dv-res').innerHTML = ''; });
+  d.tarifsDef.forEach(x => $('#dv-' + x.k).addEventListener('input', dvDerives));
+  $('#dv-save-t').addEventListener('click', () => {
+    const cli = $('#dv-cli').value;
+    call('saveDevisTarifs', [cli, dvTarifsForm()], t2 => { S.devis.tarifs = t2; toast('Tarifs ' + cli + ' enregistrés'); });
+  });
+  $('#dv-save-c').addEventListener('click', () => {
+    const lignes = [...document.querySelectorAll('.dv-cpt tbody tr')].map(tr => ({
+      num: tr.dataset.num, cat: tr.querySelector('.dv-c-cat').value, client: tr.querySelector('.dv-c-cli').value,
+      coef: String(tr.querySelector('.dv-c-coef').value).replace(',', '.'), facture: tr.querySelector('.dv-c-fac').checked,
+    }));
+    call('saveDevisCompteurs', [lignes], c => { S.devis.compteurs = c; toast('Compteurs enregistrés'); });
+  });
+  $('#dv-ap').addEventListener('click', () => {
+    if (!$('#dv-per').value) return toast('Aucune période disponible');
+    $('#dv-prev').innerHTML = '<div class="empty"><div class="spin"></div></div>';
+    call('getDevisApercu', [$('#dv-per').value, $('#dv-cli').value, dvTarifsForm()], renderDevisApercu, e => { $('#dv-prev').innerHTML = ''; toast('Erreur : ' + (e && e.message || e)); });
+  });
+  $('#dv-gen').addEventListener('click', e => {
+    if (!$('#dv-per').value) return toast('Aucune période disponible');
+    const b = e.target; b.disabled = true; b.textContent = 'Vérification…';
+    $('#dv-res').innerHTML = '';
+    const ko = err => { b.disabled = false; b.textContent = 'Éditer le devis (PDF + Excel)'; toast('Erreur : ' + (err && err.message || err)); };
+    call('getDevisApercu', [$('#dv-per').value, $('#dv-cli').value, dvTarifsForm()], ap => {
+      renderDevisApercu(ap);
+      if (ap.alertes.length && !confirm(ap.alertes.length + ' relevé(s) à vérifier (voir l\'aperçu) : leur consommation n\'est pas comptée.\nÉditer le devis quand même ?')) {
+        b.disabled = false; b.textContent = 'Éditer le devis (PDF + Excel)'; return;
+      }
+      b.textContent = 'Édition en cours…';
+      dvEditer(b, ko);
+    }, ko);
+  });
+}
+function dvEditer(b, ko){
+    call('genererDevis', [$('#dv-per').value, $('#dv-cli').value, $('#dv-obj').value.trim(), dvTarifsForm()], r => {
+      b.disabled = false; b.textContent = 'Éditer le devis (PDF + Excel)';
+      S.devis.historique = r.historique; renderDevisHist();
+      $('#dv-res').innerHTML = '<div class="fb ok dv-ok"><b>Devis ' + esc(r.numero) + '</b> · ' + dvEur(r.totalHT) + ' HT · ' + dvEur(r.totalTTC) + ' TTC'
+        + '<div class="dv-act"><button class="btn" id="dv-dl-pdf">Télécharger le PDF</button><button class="btn" id="dv-dl-xls">Télécharger l\'Excel</button></div></div>';
+      $('#dv-dl-pdf').addEventListener('click', () => dvDl(r.pdf));
+      $('#dv-dl-xls').addEventListener('click', () => dvDl(r.xlsx));
+      toast('Devis ' + r.numero + ' édité');
+    }, ko);
+}
+function dvDl(f){
+  try {
+    const bin = atob(f.b64), u = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([u], { type: f.mime }));
+    const a = document.createElement('a'); a.href = url; a.download = f.name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  } catch (e) { window.open(f.url, '_blank'); }
+}
+function renderDevisApercu(d){
+  if (!d.lignesCount) { $('#dv-prev').innerHTML = '<div class="empty">Aucun compteur facturé pour ce client.</div>'; return; }
+  let h = '<div class="kpis" style="margin-top:12px"><div class="kpi"><span>Total HT</span><b>' + dvEur(d.totalHT) + '</b></div>'
+    + '<div class="kpi"><span>TVA</span><b>' + dvEur(d.tva) + '</b></div><div class="kpi"><span>Total TTC</span><b>' + dvEur(d.totalTTC) + '</b></div></div>'
+    + (d.dateReleve ? '<div class="muted" style="margin:6px 0">Relevés effectués par DALKIA le ' + esc(d.dateReleve) + '</div>' : '')
+    + (d.alertes.length ? '<div class="msg warn"><b>' + d.alertes.length + ' relevé(s) à vérifier</b> – consommation non comptée tant que l\'index n\'est pas corrigé :<br>' + d.alertes.map(esc).join('<br>') + '</div>' : '')
+    + '<div class="scroll"><table class="t"><thead><tr><th>Catégorie</th><th class="n">Index préc.</th><th class="n">Index actuel</th><th class="n">Quantité</th><th class="n">P.U. HT</th><th class="n">Total HT</th></tr></thead><tbody>';
+  d.lieux.forEach(L => {
+    h += '<tr class="dv-lieu"><td colspan="5">' + esc(L.lieu) + '</td><td class="n">' + dvEur(L.sousTotal) + '</td></tr>';
+    L.lignes.forEach(l => {
+      h += '<tr><td><span class="dv-cat ' + (l.cat === 'ELECTRICITE' ? 'ELC' : l.cat === 'GAZ' ? 'GAZ' : 'EAU') + '">' + esc(l.cat) + '</span>'
+        + (l.coef !== 1 ? ' <span class="muted">×' + fr(l.coef) + '</span>' : '') + (l.notes ? '<div class="muted"' + (l.alerte ? ' style="color:var(--amber)"' : '') + '>' + esc(l.notes) + '</div>' : '') + '</td>'
+        + '<td class="n">' + fr(l.iPrev, 0) + '</td><td class="n">' + fr(l.iCur, 0) + '</td><td class="n">' + fr(l.qte) + ' ' + l.unite + '</td>'
+        + '<td class="n">' + dvEur(l.pu, l.unite === 'kWh' ? 4 : 2) + '</td><td class="n">' + dvEur(l.total) + '</td></tr>';
+    });
+  });
+  $('#dv-prev').innerHTML = h + '</tbody></table></div>';
+}
+function renderDevisHist(){
+  const H = S.devis.historique || [];
+  $('#dv-hist').innerHTML = !H.length ? '<div class="empty">Aucun devis édité pour l\'instant.</div>'
+    : '<div class="scroll"><table class="t"><thead><tr><th>N°</th><th>Client</th><th>Période</th><th class="n">Total HT</th><th></th></tr></thead><tbody>'
+      + H.map(x => '<tr><td><b>' + esc(x.numero) + '</b><div class="muted">' + esc(x.date) + '</div></td><td>' + esc(x.client) + '</td><td>' + esc(x.periode) + '</td>'
+        + '<td class="n">' + dvEur(x.totalHT) + '</td><td class="n">' + (x.pdf ? '<a target="_blank" rel="noopener" href="' + esc(x.pdf) + '">PDF</a>' : '') + (x.pdf && x.xlsx ? ' · ' : '') + (x.xlsx ? '<a target="_blank" rel="noopener" href="' + esc(x.xlsx) + '">Excel</a>' : '') + '</td></tr>').join('')
+      + '</tbody></table></div>';
+}
+
+function chargerEau(){
+  $('#eau').innerHTML = '<div class="empty"><div class="spin"></div></div>';
+  call('getEau', [], d => { S.eau = d; renderEau(d, $('#eau')); });
+}
+function renderEau(d, root){
+  if (!d.mois.length) { root.innerHTML = '<div class="card empty">Aucun relevé d\'eau.</div>'; return; }
+  const n = d.mois.length - 1, last = d.mois[n];
+  const moy = a => { const v = a.slice(0, n).filter(x => x != null && x > 0); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
+  const var_ = (v, m) => m && v != null ? (v >= m ? '+' : '') + Math.round((v / m - 1) * 100) + ' % vs moy.' : '';
+  let h = '<div class="kpis big">'
+    + '<div class="kpi"><b>' + fr(d.gen[n], 0) + '</b><span>Arrivées générales (m³) · ' + moisC(last) + '<br>' + var_(d.gen[n], moy(d.gen)) + '</span></div>'
+    + '<div class="kpi"><b>' + fr(d.div[n], 0) + '</b><span>Sous-compteurs (m³)</span></div>'
+    + '<div class="kpi"><b>' + fr(d.ecart[n], 0) + '</b><span>Non comptabilisé (m³)' + (d.refEcart != null ? '<br>habituel ≈ ' + fr(d.refEcart, 0) : '') + '</span></div>'
+    + '<div class="kpi"><b>' + d.alertes.length + '</b><span>Alertes</span></div></div>';
+  if (d.alertes.length) {
+    h += '<details class="banner"' + (d.alertes.some(a => a.niveau === 'haute') ? ' open' : '') + '><summary>▸ À vérifier (' + d.alertes.length + ') <span>— toucher pour afficher</span></summary><div style="margin-top:6px">'
+      + d.alertes.map(a => '<div class="alert"><b><span class="lvl ' + a.niveau + '"></span>' + esc(a.titre) + '</b>' + esc(a.detail) + '</div>').join('') + '</div></details>';
+  }
+  const mx = Math.max.apply(null, d.gen.concat(d.div).map(x => x || 0)) || 1;
+  h += '<div class="card chart mb"><h2>Eau par mois (m³)</h2><div class="legend"><span><i style="background:var(--blue)"></i>Arrivées générales</span><span><i style="background:var(--grey-bar)"></i>Sous-compteurs</span></div>'
+    + d.mois.map((m, i) => '<div class="hb"><div class="lbl">' + moisC(m) + '</div><div class="bars"><div class="b1" style="width:' + ((d.gen[i] || 0) / mx * 100) + '%"></div><div class="b2" style="width:' + ((d.div[i] || 0) / mx * 100) + '%"></div></div><div class="val">' + fr(d.gen[i], 0) + '</div></div>').join('')
+    + '<p class="muted" style="font-size:11.5px;margin:8px 0 0">Les sous-compteurs ne couvrent qu\'une partie des usages : surveiller surtout l\'évolution de l\'écart hors période de salon.</p></div>';
+  const roles = ['Arrivée générale', 'Nappe', 'Divisionnaire', 'Aval adoucisseur'];
+  h += '<div class="card"><h2>Par compteur · ' + moisC(last) + '</h2><div class="scroll"><table class="t"><thead><tr><th>Compteur</th><th class="n">Mois</th><th class="n hide-sm">Habituel</th><th class="hide-sm">12 mois</th><th></th></tr></thead><tbody>';
+  roles.forEach(ro => {
+    const l = d.compteurs.filter(c => c.role === ro); if (!l.length) return;
+    h += '<tr><td colspan="5" style="background:var(--blue-soft);font-weight:600;font-size:12px">' + esc(ro) + '</td></tr>';
+    l.forEach(c => {
+      const sm = Math.max.apply(null, c.conso.map(x => x || 0)) || 1;
+      h += '<tr' + (c.alerte ? ' class="hl"' : '') + '><td>' + esc(c.designation) + ' <span class="num">n° ' + esc(c.num) + '</span><div class="muted" style="font-size:11.5px">' + esc(c.localisation) + '</div></td>'
+        + '<td class="n"><b>' + fr(c.dernier, 1) + '</b></td><td class="n hide-sm">' + fr(c.ref, 1) + '</td>'
+        + '<td class="hide-sm"><span class="spark">' + c.conso.slice(-12).map(x => '<i style="height:' + Math.max(1, (x || 0) / sm * 18) + 'px"></i>').join('') + '</span></td>'
+        + '<td>' + (c.alerte ? '<span class="tag' + (c.alerte === 'Continu' ? ' m' : '') + '">' + esc(c.alerte) + '</span>' : '') + '</td></tr>';
+    });
+  });
+  h += '</tbody></table></div></div>';
+  root.innerHTML = h;
+}
+
+function chargerHist(num){
+  if (!num) { $('#hist').innerHTML = '<div class="card empty">Choisir un compteur ci-dessus.</div>'; return; }
+  $('#hist').innerHTML = '<div class="empty"><div class="spin"></div></div>';
+  call('getHistorique', [num], d => {
+    const c = d.compteur, l = d.releves.slice().reverse();
+    const mx = Math.max.apply(null, l.map(r => r.conso || 0)) || 1;
+    $('#hist').innerHTML = '<div class="card"><h2>' + esc(c.designation) + ' <span class="chip ' + esc(c.type) + '">' + esc(c.type) + '</span> <span class="num">n° ' + esc(c.num) + '</span></h2>'
+      + '<div class="loc">' + esc(c.localisation) + ' · ' + esc(c.secteur) + '</div>'
+      + '<div class="scroll"><table class="t"><thead><tr><th>Mois</th><th class="n">Index</th><th class="n">Conso (' + esc(c.unite) + ')</th><th class="hide-sm" style="width:30%"></th><th>Statut</th></tr></thead><tbody>'
+      + l.map(r => '<tr' + (r.ctrl && !/Changement|confirmé/.test(r.ctrl) ? ' class="hl"' : '') + '><td>' + moisC(r.per) + '<div class="muted" style="font-size:11px">' + jour(r.date) + ' · ' + esc(r.qui) + '</div></td><td class="n">' + fr(r.index) + '</td><td class="n">' + fr(r.conso) + '</td>'
+        + '<td class="hide-sm"><div style="height:8px;border-radius:2px;background:var(--blue);width:' + ((r.conso || 0) / mx * 100) + '%"></div></td>'
+        + '<td>' + (r.statut && r.statut !== 'OK' ? '<span class="tag m">' + esc(r.statut) + '</span> ' : '') + (r.ctrl ? '<span class="tag">' + esc(r.ctrl) + '</span>' : '') + (r.com ? '<div class="muted" style="font-size:11px">' + esc(r.com) + '</div>' : '') + '</td></tr>').join('')
+      + '</tbody></table></div></div>';
+  });
+}
+
+init();
+})();
+</script>
+</body>
+</html>
