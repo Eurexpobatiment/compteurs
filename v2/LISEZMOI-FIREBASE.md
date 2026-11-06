@@ -4,8 +4,11 @@ Même appli que la version actuelle (mêmes onglets, mêmes contrôles, mêmes d
 (projet `equipe-batiment`, le même que les applis Équipe et Températures) au lieu du Google Sheet :
 chargement instantané, consultation et saisie hors connexion (envoi automatique au retour du réseau).
 
-Adresse pendant la transition : https://eurexpobatiment.github.io/compteurs/v2/
-L'ancienne version (https://eurexpobatiment.github.io/compteurs/) continue de marcher en parallèle.
+Adresse : https://eurexpobatiment.github.io/compteurs/ (version Firebase en service depuis le 6 nov. 2026 ; /v2/ redirige ici).
+L'ancienne version (Google Sheet) n'a plus de page ; le classeur reste comme archive et comme référentiel des compteurs.
+
+Mise en place faite le 6 nov. 2026 : règles publiées, 162 compteurs et 2 802 relevés copiés, copie toutes les 10 minutes
+installée, script en version 15, appli Consommations en version 57.
 
 Pour Dalkia et les SSIAP, rien ne change : pas de compte, on indique son nom en haut de l'écran.
 La toute première saisie sur un appareil demande internet ; ensuite les relevés passent même sans réseau.
