@@ -214,7 +214,7 @@ table.t tr.dv-lieu td{background:var(--blue-soft);font-weight:600}
 (function(){
 'use strict';
 const $ = s => document.querySelector(s);
-const S = { per: '', compteurs: [], secteurs: [], ouverts: {}, filtre: 'reste', q: '', eau: null, ctrl: null, pending: {} };
+const S = { per: '', per0: '', today: '', compteurs: [], secteurs: [], ouverts: {}, filtre: 'reste', q: '', eau: null, ctrl: null, pending: {}, seul: null };
 const MOIS = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
 const MOIS_L = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 
@@ -253,8 +253,12 @@ function init(){
   $('#qui').value = store.get('rc_qui') || '';
   $('#qui').addEventListener('change', e => store.set('rc_qui', e.target.value.trim()));
   $('#filtre').value = store.get('rc_filtre') || 'reste'; S.filtre = $('#filtre').value;
-  $('#filtre').addEventListener('change', e => { S.filtre = e.target.value; store.set('rc_filtre', S.filtre); renderReleve(); });
-  $('#q').addEventListener('input', e => { S.q = e.target.value.trim().toLowerCase(); renderReleve(); });
+  $('#filtre').addEventListener('change', e => { S.filtre = e.target.value; store.set('rc_filtre', S.filtre); S.seul = null; renderReleve(); });
+  $('#q').addEventListener('input', e => { S.q = e.target.value.trim().toLowerCase(); S.seul = null; renderReleve(); });
+  document.addEventListener('click', e => {
+    const b = e.target.closest('.corr'); if (!b) return;
+    corriger(b.dataset.num, b.dataset.per, b.dataset.date);
+  });
   $('#per').addEventListener('change', e => changerPeriode(e.target.value));
   $('#btn-refresh').addEventListener('click', charger);
   $('#hsel').addEventListener('change', e => chargerHist(e.target.value));
@@ -266,7 +270,7 @@ function charger(){
   S.eau = null;
   call('getInit', [], d => {
     $('#loading').style.display = 'none';
-    S.per = d.periode; S.compteurs = d.compteurs; S.secteurs = d.secteurs;
+    S.per = d.periode; S.per0 = d.periode; S.today = d.aujourdhui; S.seul = null; S.compteurs = d.compteurs; S.secteurs = d.secteurs;
     if (d.secteurs.length && !Object.keys(S.ouverts).length) S.ouverts[d.secteurs[0]] = true;
     $('#date').value = d.aujourdhui; $('#date').max = d.aujourdhui;
     const p0 = pd(d.periode), opts = [];
@@ -279,10 +283,36 @@ function charger(){
     show(store.get('rc_vue') || 'releve');
   }, e => { $('#loading').innerHTML = '<div class="empty">Impossible de charger les données.<br>' + esc(e && e.message || e) + '</div>'; });
 }
-function changerPeriode(per){
+function changerPeriode(per, apres){
   S.per = per;
   $('#sects').innerHTML = '<div class="empty"><div class="spin"></div></div>';
-  call('getPeriode', [per], cpts => { S.compteurs = cpts; renderReleve(); });
+  call('getPeriode', [per], cpts => { S.compteurs = cpts; renderReleve(); if (apres) apres(); });
+}
+
+// ───────────────────────── Correction d'un index déjà saisi (mois en cours ou passé)
+function corriger(num, per, date){
+  if (!num || !per) return;
+  const sel = $('#per');
+  if (!Array.from(sel.options).some(o => o.value === per)) {
+    const o = document.createElement('option'); o.value = per; o.textContent = moisL(per); sel.appendChild(o);
+  }
+  sel.value = per;
+  S.seul = num; S.q = ''; $('#q').value = '';
+  if (date) $('#date').value = String(date).slice(0, 10);
+  show('releve');
+  changerPeriode(per, () => {
+    const c = S.compteurs.find(x => x.num === num);
+    if (c) S.ouverts[c.secteur] = true;
+    if (!date && c && c.cur && c.cur.date) $('#date').value = String(c.cur.date).slice(0, 10);
+    renderReleve();
+    const i = document.querySelector('.cpt[data-num="' + CSS.escape(num) + '"] .idx');
+    if (i && !i.disabled) { i.focus(); i.select(); }
+  });
+}
+function finCorrection(){
+  S.seul = null;
+  $('#date').value = S.today;
+  if (S.per !== S.per0) { $('#per').value = S.per0; changerPeriode(S.per0); } else renderReleve();
 }
 
 function etat(c){
@@ -290,6 +320,7 @@ function etat(c){
   return '';
 }
 function visible(c){
+  if (S.seul) return c.num === S.seul;
   if (S.q) {
     const h = (c.num + ' ' + c.designation + ' ' + c.localisation + ' ' + c.secteur).toLowerCase();
     if (h.indexOf(S.q) < 0) return false;
@@ -316,7 +347,11 @@ function renderReleve(){
       + '<span class="cnt">' + done + '/' + all.length + '</span><span class="bar"><i style="width:' + pct + '%"></i></span></summary>'
       + vis.map(rowCpt).join('') + '</details>';
   }).join('');
-  $('#sects').innerHTML = html || '<div class="card empty">' + (S.filtre === 'reste' ? '✓ Tous les compteurs sont relevés pour ' + moisL(S.per) + '.' : 'Aucun compteur.') + '</div>';
+  const bandeau = S.seul ? '<div class="banner" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div style="flex:1 1 220px"><b>Correction du n° ' + esc(S.seul) + ' · ' + esc(moisL(S.per)) + '</b><br>'
+    + '<span style="font-size:12.5px">Saisissez le bon index puis « Modifier ». La date du relevé reprend celle d\'origine (modifiable en haut).</span></div>'
+    + '<button class="btn sec" id="fin-corr" style="height:34px">Terminer</button></div>' : '';
+  $('#sects').innerHTML = bandeau + (html || '<div class="card empty">' + (S.filtre === 'reste' ? '✓ Tous les compteurs sont relevés pour ' + moisL(S.per) + '.' : 'Aucun compteur.') + '</div>');
+  if (S.seul) $('#fin-corr').addEventListener('click', finCorrection);
   document.querySelectorAll('details.sect').forEach(d => d.addEventListener('toggle', () => { S.ouverts[d.dataset.s] = d.open; }));
   document.querySelectorAll('.cpt').forEach(bind);
 }
@@ -418,10 +453,11 @@ function chargerCtrl(){
       h += '<details class="sect mb"><summary><span class="chev">›</span>Compteurs non relevables ce mois<span class="cnt">' + d.nonReleves.length + '</span></summary><div class="scroll" style="padding:0 12px 8px"><table class="t"><tbody>'
         + d.nonReleves.map(x => lig(x, x.com) + '<td><span class="tag m">' + esc(x.statut) + '</span></td></tr>').join('') + '</tbody></table></div></details>';
     }
-    h += '<div class="card"><h2>Relevés signalés (les plus récents)</h2><div class="scroll"><table class="t"><thead><tr><th>N°</th><th>Compteur</th><th>Mois</th><th class="n">Index</th><th>Contrôle</th></tr></thead><tbody>'
-      + (d.signales.length ? d.signales.map(x => '<tr><td>' + esc(x.num) + '</td><td>' + esc(x.designation) + '<div class="muted" style="font-size:11.5px">' + esc(x.localisation) + '</div></td><td>' + moisC(x.per) + '</td><td class="n">' + fr(x.index) + '</td><td><span class="tag' + (/confirmé/i.test(x.ctrl) ? ' m' : '') + '">' + esc(x.ctrl) + '</span></td></tr>').join('')
-        : '<tr><td colspan="5" class="empty">Aucun relevé signalé.</td></tr>')
-      + '</tbody></table></div><p class="muted" style="font-size:12px;margin:8px 0 0">Corriger l\'index dans l\'onglet Relevés du classeur, puis menu Relevés › Recalculer.</p></div>';
+    h += '<div class="card"><h2>Relevés signalés (les plus récents)</h2><div class="scroll"><table class="t"><thead><tr><th>N°</th><th>Compteur</th><th>Mois</th><th class="n">Index</th><th>Contrôle</th><th></th></tr></thead><tbody>'
+      + (d.signales.length ? d.signales.map(x => '<tr><td>' + esc(x.num) + '</td><td>' + esc(x.designation) + '<div class="muted" style="font-size:11.5px">' + esc(x.localisation) + '</div></td><td>' + moisC(x.per) + '</td><td class="n">' + fr(x.index) + '</td><td><span class="tag' + (/confirmé/i.test(x.ctrl) ? ' m' : '') + '">' + esc(x.ctrl) + '</span></td>'
+        + '<td class="n">' + btnCorr(x.num, x.per, x.date) + '</td></tr>').join('')
+        : '<tr><td colspan="6" class="empty">Aucun relevé signalé.</td></tr>')
+      + '</tbody></table></div><p class="muted" style="font-size:12px;margin:8px 0 0">« Corriger » ouvre le relevé concerné pour ressaisir le bon index.</p></div>';
     $('#ctrl').innerHTML = h;
   });
 }
@@ -645,6 +681,10 @@ async function exporterIndex(){
     } catch (e) { toast('Erreur : ' + (e && e.message || e)); }
   }, x => { fin(); z.innerHTML = ''; toast('Erreur : ' + (x && x.message || x)); });
 }
+function btnCorr(num, per, date){
+  if (!num || !per) return '';
+  return '<button type="button" class="btn sec corr" style="height:30px;padding:0 10px;font-size:12px" data-num="' + esc(num) + '" data-per="' + esc(String(per).slice(0, 10)) + '" data-date="' + esc(date ? String(date).slice(0, 10) : '') + '">Corriger</button>';
+}
 function chargerHist(num){
   if (!num) { $('#hist').innerHTML = '<div class="card empty">Choisir un compteur ci-dessus.</div>'; return; }
   $('#hist').innerHTML = '<div class="empty"><div class="spin"></div></div>';
@@ -653,10 +693,11 @@ function chargerHist(num){
     const mx = Math.max.apply(null, l.map(r => r.conso || 0)) || 1;
     $('#hist').innerHTML = '<div class="card"><h2>' + esc(c.designation) + ' <span class="chip ' + esc(c.type) + '">' + esc(c.type) + '</span> <span class="num">n° ' + esc(c.num) + '</span></h2>'
       + '<div class="loc">' + esc(c.localisation) + ' · ' + esc(c.secteur) + '</div>'
-      + '<div class="scroll"><table class="t"><thead><tr><th>Mois</th><th class="n">Index</th><th class="n">Conso (' + esc(c.unite) + ')</th><th class="hide-sm" style="width:30%"></th><th>Statut</th></tr></thead><tbody>'
+      + '<div class="scroll"><table class="t"><thead><tr><th>Mois</th><th class="n">Index</th><th class="n">Conso (' + esc(c.unite) + ')</th><th class="hide-sm" style="width:30%"></th><th>Statut</th><th></th></tr></thead><tbody>'
       + l.map(r => '<tr' + (r.ctrl && !/Changement|confirmé/.test(r.ctrl) ? ' class="hl"' : '') + '><td>' + moisC(r.per) + '<div class="muted" style="font-size:11px">' + jour(r.date) + ' · ' + esc(r.qui) + '</div></td><td class="n">' + fr(r.index) + '</td><td class="n">' + fr(r.conso) + '</td>'
         + '<td class="hide-sm"><div style="height:8px;border-radius:2px;background:var(--blue);width:' + ((r.conso || 0) / mx * 100) + '%"></div></td>'
-        + '<td>' + (r.statut && r.statut !== 'OK' ? '<span class="tag m">' + esc(r.statut) + '</span> ' : '') + (r.ctrl ? '<span class="tag">' + esc(r.ctrl) + '</span>' : '') + (r.com ? '<div class="muted" style="font-size:11px">' + esc(r.com) + '</div>' : '') + '</td></tr>').join('')
+        + '<td>' + (r.statut && r.statut !== 'OK' ? '<span class="tag m">' + esc(r.statut) + '</span> ' : '') + (r.ctrl ? '<span class="tag">' + esc(r.ctrl) + '</span>' : '') + (r.com ? '<div class="muted" style="font-size:11px">' + esc(r.com) + '</div>' : '') + '</td>'
+        + '<td class="n">' + btnCorr(c.num, r.per, r.date) + '</td></tr>').join('')
       + '</tbody></table></div></div>';
   });
 }
