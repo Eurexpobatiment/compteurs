@@ -199,7 +199,10 @@ table.t tr.dv-lieu td{background:var(--blue-soft);font-weight:600}
       </div>
       <div id="ex-pick"></div>
     </div>
-    <div class="card mb"><label class="f" for="hsel">Compteur</label><select id="hsel"></select></div>
+    <div class="card mb"><div class="row">
+      <div class="field" style="flex:1 1 200px"><label class="f" for="hq">Rechercher</label><input type="search" id="hq" placeholder="N°, nom, local, type…" autocomplete="off"></div>
+      <div class="field" style="flex:2 1 260px"><label class="f" for="hsel">Compteur <span class="muted" id="hnb" style="font-weight:400"></span></label><select id="hsel"></select></div>
+    </div></div>
     <div id="hist"></div>
   </section>
 </main>
@@ -411,6 +414,7 @@ function init(){
   $('#per').addEventListener('change', e => changerPeriode(e.target.value));
   $('#btn-refresh').addEventListener('click', charger);
   $('#hsel').addEventListener('change', e => chargerHist(e.target.value));
+  $('#hq').addEventListener('input', () => remplirHsel());
   $('#ex-open').addEventListener('click', exporterIndex);
   charger();
 }
@@ -426,8 +430,7 @@ function charger(){
     for (let i = 0; i < 4; i++) { const x = new Date(p0.getFullYear(), p0.getMonth() - i, 1); opts.push(isoD(x)); }
     $('#per').innerHTML = opts.map(o => '<option value="' + o + '">' + moisL(o) + '</option>').join('');
     $('#per').value = d.periode;
-    $('#hsel').innerHTML = '<option value="">— choisir —</option>' + S.compteurs.slice().sort((a,b) => a.ordre - b.ordre)
-      .map(c => '<option value="' + esc(c.num) + '">' + esc(c.num + ' · ' + c.designation + ' – ' + c.localisation) + '</option>').join('');
+    remplirHsel();
     renderReleve();
     show(store.get('rc_vue') || 'releve');
   }, e => { $('#loading').innerHTML = '<div class="empty">Impossible de charger les données.<br>' + esc(e && e.message || e) + '</div>'; });
@@ -833,6 +836,18 @@ async function exporterIndex(){
 function btnCorr(num, per, date){
   if (!num || !per) return '';
   return '<button type="button" class="btn sec corr" style="height:30px;padding:0 10px;font-size:12px" data-num="' + esc(num) + '" data-per="' + esc(String(per).slice(0, 10)) + '" data-date="' + esc(date ? String(date).slice(0, 10) : '') + '">Corriger</button>';
+}
+// Recherche dans l'historique : filtre la liste des compteurs (n°, désignation, localisation, secteur, type), sans tenir compte des accents
+function sansAcc(x){ return String(x == null ? '' : x).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
+function remplirHsel(){
+  const mots = sansAcc($('#hq').value).trim().split(/\s+/).filter(Boolean), cur = $('#hsel').value;
+  const L = S.compteurs.slice().sort((a,b) => a.ordre - b.ordre)
+    .filter(c => { const t = sansAcc([c.num, c.designation, c.localisation, c.secteur, c.type].join(' ')); return mots.every(m => t.includes(m)); });
+  $('#hsel').innerHTML = '<option value="">' + (L.length ? '— choisir —' : '— aucun compteur trouvé —') + '</option>'
+    + L.map(c => '<option value="' + esc(c.num) + '">' + esc(c.num + ' · ' + c.designation + ' – ' + c.localisation) + '</option>').join('');
+  $('#hnb').textContent = mots.length ? '(' + L.length + ' sur ' + S.compteurs.length + ')' : '';
+  if (L.length === 1) { $('#hsel').value = String(L[0].num); if (cur !== String(L[0].num)) chargerHist(L[0].num); }
+  else if (L.some(c => String(c.num) === cur)) $('#hsel').value = cur;
 }
 function chargerHist(num){
   if (!num) { $('#hist').innerHTML = '<div class="card empty">Choisir un compteur ci-dessus.</div>'; return; }
