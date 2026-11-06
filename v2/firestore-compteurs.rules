@@ -1,0 +1,29 @@
+    // ===================== Appli Relevés compteurs =====================
+    // Bloc à coller dans les règles Firestore du projet equipe-batiment, JUSTE AVANT les deux
+    // dernières accolades « } » de la fin (à l'intérieur de « match /databases/{db}/documents { »).
+    // Comme l'appli actuelle : pas de compte ni de code ; l'appli se connecte toute seule en anonyme pour écrire.
+
+    function cptEntreesOk(r) { return r is map && r.size() <= 400; }
+    function cptChampsOk(d) {
+      return d.keys().hasOnly(['num', 'rang', 'secteur', 'ordre', 'type', 'usage', 'designation', 'localisation', 'unite', 'role', 'actif', 'remarque', 'r'])
+        && d.num is string && d.num.size() <= 40 && cptEntreesOk(d.get('r', {}));
+    }
+
+    // Un document par compteur ; ses relevés dans le champ r ({ 'AAAA-MM': relevé })
+    match /CptCompteurs/{id} {
+      allow read: if true;
+      allow create: if request.auth != null && id.size() <= 100 && cptChampsOk(request.resource.data);
+      allow update: if request.auth != null && cptChampsOk(request.resource.data) && request.resource.data.num == resource.data.num;
+      allow delete: if false; // un compteur se retire en le passant « Actif : Non » dans l'onglet Compteurs du classeur
+    }
+
+    // Devis : tarifs et compteurs facturés (devis), devis édités (registre)
+    match /CptConfig/{id} {
+      allow read: if true;
+      allow write: if request.auth != null && (
+        (id == 'devis' && request.resource.data.keys().hasOnly(['tarifs', 'compteurs'])
+          && request.resource.data.get('tarifs', {}) is map && request.resource.data.get('compteurs', []) is list)
+        || (id == 'registre' && request.resource.data.keys().hasOnly(['liste']) && request.resource.data.liste is list
+          && request.resource.data.liste.size() <= 2000));
+    }
+    // ===================== fin Relevés compteurs =====================
