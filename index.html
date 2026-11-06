@@ -609,44 +609,42 @@ function renderEau(d, root){
 // stratégie Chrome/Edge), on bascule automatiquement sur un téléchargement classique
 // (dossier Téléchargements) au lieu de s'arrêter sans rien afficher.
 async function exporterIndex(){
+  // Version 3 : le bouton réagit toujours. On prépare d'abord le fichier (≈ 15 s),
+  // puis on affiche « Télécharger le fichier » : le téléchargement part d'un clic,
+  // donc aucun navigateur (Edge/Chrome gérés, Safari, Firefox) ne peut le bloquer.
+  // « Enregistrer sous… » reste proposé quand le navigateur le permet.
   const b = $('#ex-open'), z = $('#ex-pick');
   const nom = 'Index compteurs Eurexpo - ' + isoD(new Date()) + '.xlsx';
-  let fh = null;
-  if (window.showSaveFilePicker) {
-    const t0 = Date.now();
-    try {
-      fh = await window.showSaveFilePicker({ suggestedName: nom, types: [{ description: 'Classeur Excel', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }] });
-    } catch (e) {
-      // Une vraie annulation prend du temps (la fenêtre s'est ouverte).
-      // Un refus immédiat (< 0,8 s) = fenêtre bloquée par le navigateur → téléchargement classique.
-      if (e && e.name === 'AbortError' && Date.now() - t0 > 800) return;
-      fh = null;
-    }
-  }
-  b.disabled = true; b.textContent = 'Export en cours…'; z.innerHTML = '';
+  b.disabled = true; b.textContent = 'Export en cours…';
+  z.innerHTML = '<div class="muted" style="font-size:12.5px;margin-top:8px">Préparation du fichier Excel (environ 15 secondes)…</div>';
   const fin = () => { b.disabled = false; b.textContent = 'Exporter en Excel…'; };
-  const telecharger = (blob) => {
-    const url = URL.createObjectURL(blob), a = document.createElement('a');
-    a.href = url; a.download = nom; document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-  };
-  call('exporterIndex', [], async r => {
+  call('exporterIndex', [], r => {
+    fin();
     try {
       const bin = atob(r.b64), u = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
       const blob = new Blob([u], { type: r.mime });
-      let ou = '';
-      if (fh) {
-        try { const w = await fh.createWritable(); await w.write(blob); await w.close(); ou = fh.name; }
-        catch (e) { telecharger(blob); ou = nom + ' (dossier Téléchargements)'; }
-      } else { telecharger(blob); ou = nom + ' (dossier Téléchargements)'; }
-      z.innerHTML = '<div class="fb ok dv-ok">✓ ' + esc(ou) + ' enregistré (' + r.compteurs + ' compteurs · ' + r.mois + ' mois)</div>';
-      toast('Export Excel enregistré');
+      const url = URL.createObjectURL(blob);
+      z.innerHTML = '<div class="fb ok dv-ok">✓ Fichier prêt (' + r.compteurs + ' compteurs · ' + r.mois + ' mois)</div>'
+        + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'
+        + '<a class="btn" id="ex-dl" href="' + url + '" download="' + esc(nom) + '" style="text-decoration:none">Télécharger le fichier</a>'
+        + (window.showSaveFilePicker ? '<button type="button" class="btn sec" id="ex-save">Enregistrer sous…</button>' : '')
+        + '</div>';
+      $('#ex-dl').addEventListener('click', () => toast('Téléchargement lancé (dossier Téléchargements)'));
+      const s = $('#ex-save');
+      if (s) s.addEventListener('click', async () => {
+        try {
+          const fh = await window.showSaveFilePicker({ suggestedName: nom, types: [{ description: 'Classeur Excel', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }] });
+          const w = await fh.createWritable(); await w.write(blob); await w.close();
+          toast('Enregistré : ' + fh.name);
+        } catch (e) {
+          if (e && e.name === 'AbortError') return;
+          toast('« Enregistrer sous » indisponible sur ce poste : utilisez « Télécharger le fichier »');
+        }
+      });
     } catch (e) { toast('Erreur : ' + (e && e.message || e)); }
-    fin();
-  }, x => { fin(); toast('Erreur : ' + (x && x.message || x)); });
+  }, x => { fin(); z.innerHTML = ''; toast('Erreur : ' + (x && x.message || x)); });
 }
-
 function chargerHist(num){
   if (!num) { $('#hist').innerHTML = '<div class="card empty">Choisir un compteur ci-dessus.</div>'; return; }
   $('#hist').innerHTML = '<div class="empty"><div class="spin"></div></div>';
