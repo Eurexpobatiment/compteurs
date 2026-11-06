@@ -605,29 +605,42 @@ function renderEau(d, root){
 }
 
 // ───────────────────────── Export de tous les index (Excel, emplacement au choix)
+// Version corrigée : si la fenêtre « Enregistrer sous » est bloquée (PC géré,
+// stratégie Chrome/Edge), on bascule automatiquement sur un téléchargement classique
+// (dossier Téléchargements) au lieu de s'arrêter sans rien afficher.
 async function exporterIndex(){
   const b = $('#ex-open'), z = $('#ex-pick');
   const nom = 'Index compteurs Eurexpo - ' + isoD(new Date()) + '.xlsx';
   let fh = null;
   if (window.showSaveFilePicker) {
+    const t0 = Date.now();
     try {
       fh = await window.showSaveFilePicker({ suggestedName: nom, types: [{ description: 'Classeur Excel', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }] });
-    } catch (e) { if (e && e.name === 'AbortError') return; fh = null; }
+    } catch (e) {
+      // Une vraie annulation prend du temps (la fenêtre s'est ouverte).
+      // Un refus immédiat (< 0,8 s) = fenêtre bloquée par le navigateur → téléchargement classique.
+      if (e && e.name === 'AbortError' && Date.now() - t0 > 800) return;
+      fh = null;
+    }
   }
   b.disabled = true; b.textContent = 'Export en cours…'; z.innerHTML = '';
   const fin = () => { b.disabled = false; b.textContent = 'Exporter en Excel…'; };
+  const telecharger = (blob) => {
+    const url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = nom; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  };
   call('exporterIndex', [], async r => {
     try {
       const bin = atob(r.b64), u = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
       const blob = new Blob([u], { type: r.mime });
-      if (fh) { const w = await fh.createWritable(); await w.write(blob); await w.close(); }
-      else {
-        const url = URL.createObjectURL(blob), a = document.createElement('a');
-        a.href = url; a.download = nom; document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 4000);
-      }
-      z.innerHTML = '<div class="fb ok dv-ok">✓ ' + esc(fh ? fh.name : nom) + ' enregistré (' + r.compteurs + ' compteurs · ' + r.mois + ' mois)</div>';
+      let ou = '';
+      if (fh) {
+        try { const w = await fh.createWritable(); await w.write(blob); await w.close(); ou = fh.name; }
+        catch (e) { telecharger(blob); ou = nom + ' (dossier Téléchargements)'; }
+      } else { telecharger(blob); ou = nom + ' (dossier Téléchargements)'; }
+      z.innerHTML = '<div class="fb ok dv-ok">✓ ' + esc(ou) + ' enregistré (' + r.compteurs + ' compteurs · ' + r.mois + ' mois)</div>';
       toast('Export Excel enregistré');
     } catch (e) { toast('Erreur : ' + (e && e.message || e)); }
     fin();
