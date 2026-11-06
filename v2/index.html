@@ -259,7 +259,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 const withTimeout = (p, ms, msg) => Promise.race([p, wait(ms).then(() => { throw new Error(msg); })]);
 function fbErr(e) {
   const c = e && e.code || '';
-  if (c === 'permission-denied') return 'Écriture refusée par Firebase (règles « Relevés compteurs » non publiées ?).';
+  if (c === 'permission-denied') return 'Accès refusé par Firebase : règles « Relevés compteurs » pas encore publiées ?';
   if (c === 'unavailable' || c === 'auth/network-request-failed') return 'Pas de connexion au serveur.';
   if (c === 'auth/admin-restricted-operation' || c === 'auth/operation-not-allowed') return 'Saisie indisponible : connexion anonyme non activée dans Firebase.';
   return (e && e.message ? e.message : String(e || 'Erreur inconnue.')).replace(/^Error:\s*/, '');
