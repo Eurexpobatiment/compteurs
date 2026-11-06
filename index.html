@@ -152,6 +152,21 @@ table.t tr.dv-lieu td{background:var(--blue-soft);font-weight:600}
 .ex-list{max-height:260px;overflow:auto;border-top:1px solid var(--line)}
 .ex-f{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;padding:9px 6px;cursor:pointer}
 .ex-f:hover{background:var(--blue-soft)}
+.hf{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.hf button{height:30px;padding:0 12px;border:1px solid #cfcfcb;border-radius:15px;background:#fff;font-size:12px;cursor:pointer;color:inherit}
+.hf button.on{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+.hres{max-height:300px;overflow-y:auto;border:1px solid #e4e4e0;border-radius:8px}
+.hres:empty{display:none}
+.hit{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid #eeeeea;cursor:pointer}
+.hit:last-child{border-bottom:0}
+.hit:hover,.hit.act{background:#eef3fb}
+.hit .hn{font-variant-numeric:tabular-nums;font-weight:600;min-width:62px;font-size:13px}
+.hit .hd{flex:1;min-width:0}.hit .hd div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hit .hd .muted{font-size:11px}
+.hit mark{background:#ffe58a;color:inherit;border-radius:2px;padding:0 1px}
+.hres .vide{padding:14px;text-align:center;font-size:13px}
+.hsel{display:flex;align-items:center;gap:10px;margin-top:8px;padding:8px 10px;border-radius:8px;background:#eef3fb}
+.hsel .hd{flex:1;min-width:0}
 </style>
 </head>
 <body>
@@ -199,10 +214,15 @@ table.t tr.dv-lieu td{background:var(--blue-soft);font-weight:600}
       </div>
       <div id="ex-pick"></div>
     </div>
-    <div class="card mb"><div class="row">
-      <div class="field" style="flex:1 1 200px"><label class="f" for="hq">Rechercher</label><input type="search" id="hq" placeholder="N°, nom, local, type…" autocomplete="off"></div>
-      <div class="field" style="flex:2 1 260px"><label class="f" for="hsel">Compteur <span class="muted" id="hnb" style="font-weight:400"></span></label><select id="hsel"></select></div>
-    </div></div>
+    <div class="card mb">
+      <label class="f" for="hq">Rechercher un compteur <span class="muted" id="hnb" style="font-weight:400"></span></label>
+      <input type="search" id="hq" placeholder="N°, nom, local, secteur… (plusieurs mots possibles)" autocomplete="off" role="combobox" aria-controls="hres" aria-expanded="true">
+      <div class="hf" id="hf">
+        <button type="button" data-t="" class="on">Tous</button><button type="button" data-t="EAU">Eau</button><button type="button" data-t="ELC">Électricité</button><button type="button" data-t="GAZ">Gaz</button><button type="button" data-t="FUEL">Fioul</button>
+      </div>
+      <div class="hres" id="hres" role="listbox"></div>
+      <div class="hsel" id="hsel" style="display:none"></div>
+    </div>
     <div id="hist"></div>
   </section>
 </main>
@@ -413,8 +433,7 @@ function init(){
   });
   $('#per').addEventListener('change', e => changerPeriode(e.target.value));
   $('#btn-refresh').addEventListener('click', charger);
-  $('#hsel').addEventListener('change', e => chargerHist(e.target.value));
-  $('#hq').addEventListener('input', () => remplirHsel());
+  initRechHist();
   $('#ex-open').addEventListener('click', exporterIndex);
   charger();
 }
@@ -837,17 +856,75 @@ function btnCorr(num, per, date){
   if (!num || !per) return '';
   return '<button type="button" class="btn sec corr" style="height:30px;padding:0 10px;font-size:12px" data-num="' + esc(num) + '" data-per="' + esc(String(per).slice(0, 10)) + '" data-date="' + esc(date ? String(date).slice(0, 10) : '') + '">Corriger</button>';
 }
-// Recherche dans l'historique : filtre la liste des compteurs (n°, désignation, localisation, secteur, type), sans tenir compte des accents
-function sansAcc(x){ return String(x == null ? '' : x).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
+// Recherche dans l'historique : liste de résultats cliquable (n°, désignation, localisation, secteur, type),
+// sans tenir compte des accents ; filtre par énergie ; flèches ↑ ↓ + Entrée au clavier, Échap pour refermer
+function sansAcc(x){ return String(x == null ? '' : x).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+const HR = { type: '', liste: [], act: -1, num: '' };
+const TYPES_L = { EAU: 'Eau', ELC: 'Électricité', GAZ: 'Gaz', FUEL: 'Fioul' };
+function initRechHist(){
+  const q = $('#hq');
+  q.addEventListener('input', () => { HR.act = -1; ouvrirRes(); remplirHsel(); });
+  q.addEventListener('focus', () => { if (HR.num) { ouvrirRes(); remplirHsel(); } });
+  q.addEventListener('keydown', e => {
+    const n = HR.liste.length;
+    if (e.key === 'ArrowDown' && n) { e.preventDefault(); ouvrirRes(); HR.act = (HR.act + 1) % n; majAct(); }
+    else if (e.key === 'ArrowUp' && n) { e.preventDefault(); HR.act = (HR.act - 1 + n) % n; majAct(); }
+    else if (e.key === 'Enter') { e.preventDefault(); const c = HR.liste[HR.act >= 0 ? HR.act : 0]; if (c) choisirHist(c.num); }
+    else if (e.key === 'Escape' && HR.num) { fermerRes(); q.blur(); }
+  });
+  $('#hf').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    HR.type = b.dataset.t; HR.act = -1;
+    $('#hf').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+    ouvrirRes(); remplirHsel();
+  });
+  $('#hres').addEventListener('click', e => { const h = e.target.closest('.hit'); if (h) choisirHist(h.dataset.num); });
+  $('#hsel').addEventListener('click', e => { if (e.target.closest('.chg')) { ouvrirRes(); remplirHsel(); q.focus(); } });
+}
+function ouvrirRes(){ $('#hres').style.display = ''; $('#hf').style.display = ''; $('#hsel').style.display = 'none'; $('#hq').setAttribute('aria-expanded', 'true'); }
+function fermerRes(){
+  const c = S.compteurs.find(x => String(x.num) === String(HR.num)); if (!c) return;
+  $('#hres').style.display = 'none'; $('#hf').style.display = 'none'; $('#hq').setAttribute('aria-expanded', 'false');
+  const z = $('#hsel'); z.style.display = 'flex';
+  z.innerHTML = '<span class="chip ' + esc(c.type) + '">' + esc(c.type) + '</span><div class="hd"><b>' + esc(c.num) + '</b> · ' + esc(c.designation)
+    + '<div class="muted" style="font-size:11px">' + esc(c.localisation) + ' · ' + esc(c.secteur) + '</div></div>'
+    + '<button type="button" class="btn sec chg" style="height:30px;padding:0 10px;font-size:12px">Changer</button>';
+}
+function choisirHist(num){ HR.num = String(num); fermerRes(); chargerHist(num); }
+function surligne(txt, mots){
+  let t = esc(txt); if (!mots.length) return t;
+  // repère les positions dans le texte sans accents, puis surligne le texte d'origine aux mêmes positions
+  const src = String(txt == null ? '' : txt), base = sansAcc(src);
+  if (base.length !== src.length) return t;
+  const on = new Array(src.length).fill(false);
+  mots.forEach(m => { let i = base.indexOf(m); while (i >= 0) { for (let k = i; k < i + m.length; k++) on[k] = true; i = base.indexOf(m, i + 1); } });
+  let out = '', ouvert = false;
+  for (let k = 0; k < src.length; k++) {
+    if (on[k] && !ouvert) { out += '<mark>'; ouvert = true; } else if (!on[k] && ouvert) { out += '</mark>'; ouvert = false; }
+    out += esc(src[k]);
+  }
+  return out + (ouvert ? '</mark>' : '');
+}
+function majAct(){
+  const hs = $('#hres').querySelectorAll('.hit');
+  hs.forEach((h, i) => h.classList.toggle('act', i === HR.act));
+  if (hs[HR.act]) hs[HR.act].scrollIntoView({ block: 'nearest' });
+}
 function remplirHsel(){
-  const mots = sansAcc($('#hq').value).trim().split(/\s+/).filter(Boolean), cur = $('#hsel').value;
-  const L = S.compteurs.slice().sort((a,b) => a.ordre - b.ordre)
-    .filter(c => { const t = sansAcc([c.num, c.designation, c.localisation, c.secteur, c.type].join(' ')); return mots.every(m => t.includes(m)); });
-  $('#hsel').innerHTML = '<option value="">' + (L.length ? '— choisir —' : '— aucun compteur trouvé —') + '</option>'
-    + L.map(c => '<option value="' + esc(c.num) + '">' + esc(c.num + ' · ' + c.designation + ' – ' + c.localisation) + '</option>').join('');
-  $('#hnb').textContent = mots.length ? '(' + L.length + ' sur ' + S.compteurs.length + ')' : '';
-  if (L.length === 1) { $('#hsel').value = String(L[0].num); if (cur !== String(L[0].num)) chargerHist(L[0].num); }
-  else if (L.some(c => String(c.num) === cur)) $('#hsel').value = cur;
+  const mots = sansAcc($('#hq').value).trim().split(/\s+/).filter(Boolean);
+  const L = S.compteurs.filter(c => !HR.type || c.type === HR.type)
+    .filter(c => { const t = sansAcc([c.num, c.designation, c.localisation, c.secteur, c.type, TYPES_L[c.type]].join(' ')); return mots.every(m => t.includes(m)); })
+    .map(c => { const n = sansAcc(c.num), m0 = mots[0] || ''; return { c, r: !m0 ? 2 : n === m0 ? 0 : n.startsWith(m0) ? 1 : 2 }; })
+    .sort((a, b) => a.r - b.r || a.c.ordre - b.c.ordre).map(x => x.c);
+  HR.liste = L; if (HR.act >= L.length) HR.act = -1;
+  $('#hnb').textContent = (mots.length || HR.type) ? '— ' + L.length + ' sur ' + S.compteurs.length : '— ' + S.compteurs.length + ' compteurs';
+  $('#hres').innerHTML = L.length
+    ? L.map((c, i) => '<div class="hit' + (i === HR.act ? ' act' : '') + '" role="option" data-num="' + esc(c.num) + '">'
+        + '<span class="hn">' + surligne(c.num, mots) + '</span>'
+        + '<div class="hd"><div>' + surligne(c.designation, mots) + '</div><div class="muted">' + surligne(c.localisation, mots) + ' · ' + surligne(c.secteur, mots) + '</div></div>'
+        + '<span class="chip ' + esc(c.type) + '">' + esc(c.type) + '</span></div>').join('')
+    : '<div class="vide muted">Aucun compteur trouvé' + (HR.type ? ' en ' + TYPES_L[HR.type] + ' — essayez « Tous »' : '') + '.</div>';
+  if (HR.num && $('#hsel').style.display !== 'none') fermerRes();
 }
 function chargerHist(num){
   if (!num) { $('#hist').innerHTML = '<div class="card empty">Choisir un compteur ci-dessus.</div>'; return; }
