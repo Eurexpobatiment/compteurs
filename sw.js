@@ -1,6 +1,6 @@
 /* Service worker de la version Firebase : garde l'écran de l'appli et les modules Firebase sur l'appareil.
    Les compteurs et relevés eux-mêmes sont gardés par Firebase (copie locale), pas ici. */
-const CACHE = "compteurs-fb-v5";
+const CACHE = "compteurs-fb-v6";
 const FBV = "10.14.1";
 const SHELL = ["./", "index.html", "metier.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png", "icons/icon.svg",
   `https://www.gstatic.com/firebasejs/${FBV}/firebase-app.js`,
@@ -28,7 +28,7 @@ self.addEventListener("fetch", e => {
   if (url.origin !== location.origin) return; // Firebase et script Google : réseau direct
   // Pages de l'appli : réseau d'abord (version à jour), sinon la copie gardée
   e.respondWith(
-    fetch(e.request).then(res => {
+    fetch(e.request, { cache: "no-cache" }).then(res => { // toujours vérifier la dernière version en ligne
       const copy = res.clone();
       caches.open(CACHE).then(c => c.put(e.request, copy));
       return res;
