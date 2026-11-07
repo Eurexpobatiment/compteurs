@@ -273,7 +273,9 @@ const [{ initializeApp }, A, F] = await Promise.all([
   import(`https://www.gstatic.com/firebasejs/${FBV}/firebase-app.js`),
   import(`https://www.gstatic.com/firebasejs/${FBV}/firebase-auth.js`),
   import(`https://www.gstatic.com/firebasejs/${FBV}/firebase-firestore.js`)]);
-const fbApp = initializeApp(FIREBASE), auth = A.getAuth(fbApp);
+/* Connexion partagée entre toutes les applis eurexpobatiment.github.io : même rangement partout (sinon elles se « volent » la session) */
+const fbApp = initializeApp(FIREBASE);
+let auth; try { auth = A.initializeAuth(fbApp, { persistence: [A.browserLocalPersistence, A.indexedDBLocalPersistence] }); } catch (e) { auth = A.getAuth(fbApp); }
 let db;
 try { db = F.initializeFirestore(fbApp, { localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }) }); }
 catch (e) { db = F.getFirestore(fbApp); } /* navigation privée : pas de copie sur l'appareil */
