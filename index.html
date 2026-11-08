@@ -417,7 +417,7 @@ function show(v){
   document.querySelectorAll('.view').forEach(x => x.classList.toggle('on', x.id === 'v-' + v));
   store.set('rc_vue', v);
   if (v === 'eau' && !S.eau) chargerEau();
-  if (v === 'devis' && !S.devis) chargerDevis();
+  if (v === 'devis') { if (!devisOuvert()) verrouDevis(); else if (!S.devis) chargerDevis(); }
   if (v === 'ctrl') chargerCtrl();
   if (v === 'hist' && !$('#hist').innerHTML) chargerHist();
   window.scrollTo(0, 0);
@@ -636,6 +636,26 @@ function chargerCtrl(){
 }
 
 // ───────────────────────── Devis
+/* Accès au Devis protégé par le code du service Bâtiment (le même que l'appli Demandes de travaux).
+   Seule l'empreinte SHA-256 du code est dans la page ; une fois saisi, l'appareil s'en souvient. */
+const DEVIS_CODE_SHA = '1a1bf0b0d9da883d9e2f3f627632e35710fec6cbe64692bfdd9b024ea168f4f7';
+const devisOuvert = () => store.get('rc_devis_ok') === DEVIS_CODE_SHA;
+async function sha256(t){ const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); }
+function verrouDevis(){
+  $('#devis').innerHTML = '<div class="card mb" style="max-width:360px;margin:30px auto"><h2>🔒 Devis – accès Bâtiment</h2>'
+    + '<p style="font-size:13px;color:var(--muted);margin:6px 0 10px">Saisissez le code du service Bâtiment.</p>'
+    + '<input class="inp" id="dv-code" type="password" autocomplete="off" placeholder="Code d’accès">'
+    + '<div class="dv-act"><button class="btn" id="dv-ok">Ouvrir</button></div></div>';
+  const go = async () => {
+    const c = $('#dv-code').value.trim(); if (!c) return;
+    if (await sha256(c) !== DEVIS_CODE_SHA) { toast('Code incorrect'); $('#dv-code').select(); return; }
+    store.set('rc_devis_ok', DEVIS_CODE_SHA); chargerDevis();
+  };
+  $('#dv-ok').addEventListener('click', go);
+  $('#dv-code').addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+  setTimeout(() => $('#dv-code').focus(), 50);
+}
+function fermerDevis(){ try { localStorage.removeItem('rc_devis_ok'); } catch(e){} S.devis = null; verrouDevis(); }
 function chargerDevis(){
   $('#devis').innerHTML = '<div class="empty"><div class="spin"></div></div>';
   call('getDevisInit', [], d => { S.devis = d; renderDevis(); });
@@ -683,9 +703,10 @@ function renderDevis(){
       + '<td style="text-align:center"><input type="checkbox" class="dv-c-fac"' + (c.facture ? ' checked' : '') + '></td></tr>').join('')
     + '</tbody></table></div><div class="dv-act"><button class="btn sec" id="dv-save-c">Enregistrer les compteurs</button></div></details>';
 
-  h += '<div class="card mb"><h2>Devis édités</h2><div id="dv-hist"></div><div class="dv-act"><button class="btn sec" id="dv-purge">Purger les devis</button></div></div>';
+  h += '<div class="card mb"><h2>Devis édités</h2><div id="dv-hist"></div><div class="dv-act"><button class="btn sec" id="dv-purge">Purger les devis</button><button class="btn sec" id="dv-lock">🔒 Verrouiller</button></div></div>';
   $('#devis').innerHTML = h;
   renderDevisHist();
+  $('#dv-lock').addEventListener('click', fermerDevis);
   $('#dv-purge').addEventListener('click', e => {
     if (!confirm('Supprimer tous les devis édités ?\n\nLe registre est vidé : la numérotation repart à 001.')) return;
     const b = e.currentTarget; b.disabled = true; b.textContent = 'Purge en cours…';
