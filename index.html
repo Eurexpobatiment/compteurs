@@ -274,7 +274,13 @@ const [{ initializeApp }, A, F] = await Promise.all([
   import(`https://www.gstatic.com/firebasejs/${FBV}/firebase-auth.js`),
   import(`https://www.gstatic.com/firebasejs/${FBV}/firebase-firestore.js`)]);
 /* Connexion partagée entre toutes les applis eurexpobatiment.github.io : même rangement partout (sinon elles se « volent » la session) */
+/* App Check (Fraud Defense / reCAPTCHA Enterprise) : prouve à Firebase que les requêtes viennent bien de nos pages.
+   Sans réseau ou si le module ne se charge pas, l'appli continue normalement. */
+const AC_SITE = '6Le3lBguAAAAAGb774RgCJp5Gd_jfG38Tks9out3';
+const AC = await Promise.race([import(`https://www.gstatic.com/firebasejs/${FBV}/firebase-app-check.js`), new Promise(r => setTimeout(() => r(null), 4000))]).catch(() => null);
+function appCheck(app) { if (!AC) return; try { AC.initializeAppCheck(app, { provider: new AC.ReCaptchaEnterpriseProvider(AC_SITE), isTokenAutoRefreshEnabled: true }); } catch (e) { console.warn('App Check :', e); } }
 const fbApp = initializeApp(FIREBASE);
+appCheck(fbApp);
 let auth; try { auth = A.initializeAuth(fbApp, { persistence: [A.browserLocalPersistence, A.indexedDBLocalPersistence] }); } catch (e) { auth = A.getAuth(fbApp); }
 let db;
 try { db = F.initializeFirestore(fbApp, { localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }) }); }
