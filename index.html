@@ -407,7 +407,7 @@ const API = {
     await withTimeout(F.setDoc(F.doc(db, 'CptConfig', 'registre'), { liste: [] }), 15000, 'Pas de connexion : purge non faite.');
     return n + ' devis retiré(s) du registre.';
   },
-  exporterIndex: async () => { await pretDocs; return script('fbExportIndex', [M.donneesExport(DOCS)]); },
+  exporterIndex: async () => { await pretDocs; return fabriquerExportIndex(M.donneesExport(DOCS)); },
 };
 
 function call(fn, args, ok, ko) {
@@ -840,10 +840,93 @@ function renderEau(d, root){
   root.innerHTML = h;
 }
 
+// ───────────────────────── Export Excel de tous les index : fabriqué dans la page (ExcelJS), plus de classeur temporaire dans Drive
+let excelP = null;
+function chargerExcelJS() {
+  return excelP = excelP || new Promise((ok, ko) => {
+    if (window.ExcelJS) return ok(window.ExcelJS);
+    const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+    s.onload = () => ok(window.ExcelJS); s.onerror = () => { excelP = null; ko(new Error('Module Excel non chargé (connexion ?)')); };
+    document.head.appendChild(s);
+  });
+}
+async function fabriquerExportIndex(data) {
+  const ExcelJS = await chargerExcelJS();
+  const MOISX = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+  const dt = s => { if (!s) return null; const m = /^(\d{4})-(\d{2})(?:-(\d{2}))?/.exec(String(s)); return m ? new Date(+m[1], +m[2] - 1, +(m[3] || 1)) : null; };
+  const lblMois = d => MOISX[d.getMonth()] + ' ' + d.getFullYear();
+  const fr2 = d => String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+  const cpt = (data.compteurs || []).map(c => Object.assign({}, c, { num: String(c.num) }));
+  const rel = (data.releves || []).map(r => Object.assign({}, r, { num: String(r.num), per: dt(r.per), date: dt(r.date),
+    index: r.index == null ? null : Number(r.index), conso: r.conso == null ? null : Number(r.conso), ancien: r.ancien == null ? null : Number(r.ancien) }))
+    .filter(r => r.num && r.per);
+  const cm = {}; cpt.forEach(c => (cm[c.num] = c));
+  const perKeys = {}; rel.forEach(r => (perKeys[isoD(r.per).slice(0, 7)] = r.per));
+  const pers = Object.keys(perKeys).sort();
+  const grille = {};
+  rel.forEach(r => { const g = (grille[r.num] = grille[r.num] || {}), k = isoD(r.per).slice(0, 7); if (r.index !== null || !g[k] || g[k].index === null) g[k] = r; });
+
+  const wb = new ExcelJS.Workbook(); wb.creator = 'Relevés compteurs – Eurexpo'; wb.created = new Date();
+  const fill = c => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + c.replace('#', '') } });
+  const bord = { style: 'thin', color: { argb: 'FFE4E4E0' } }, BORD = { top: bord, left: bord, bottom: bord, right: bord };
+  const larg = px => Math.round(px / 7 * 10) / 10;
+  // Onglet Index
+  const sh = wb.addWorksheet('Index', { views: [{ state: 'frozen', xSplit: 4, ySplit: 4 }] });
+  const FIX = ['N°', 'Secteur', 'Type', 'Désignation', 'Localisation', 'Unité', 'Actif'], HDR = 4;
+  sh.getRow(1).height = 36;
+  try {
+    const src = (document.querySelector('header.top img') || {}).src || '';
+    const b64 = src.split(',')[1];
+    if (b64) { const im = document.querySelector('header.top img'), ratio = im.naturalHeight ? im.naturalWidth / im.naturalHeight : 6.4;
+      sh.addImage(wb.addImage({ base64: b64, extension: 'png' }), { tl: { col: 0, row: 0 }, ext: { width: Math.round(36 * ratio), height: 36 } }); }
+  } catch (e) { /* logo facultatif */ }
+  sh.getCell(2, 1).value = 'Index de tous les compteurs'; sh.getCell(2, 1).font = { bold: true, size: 14 };
+  const now = new Date();
+  sh.getCell(3, 1).value = 'Export du ' + fr2(now) + ' ' + String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0')
+    + ' · ' + cpt.length + ' compteurs · ' + pers.length + ' mois · cases orange = relevé signalé (voir commentaire)';
+  sh.getCell(3, 1).font = { size: 9, color: { argb: 'FF6B6B70' } };
+  const entete = FIX.concat(pers.map(k => lblMois(perKeys[k])));
+  const hr = sh.getRow(HDR); hr.values = entete;
+  hr.eachCell(c => { c.font = { bold: true }; c.fill = fill('#e8f0fb'); c.alignment = { wrapText: true, vertical: 'middle' }; c.border = BORD; });
+  cpt.forEach((c, i) => {
+    const g = grille[c.num] || {}, row = sh.getRow(HDR + 1 + i);
+    const vals = [c.num, c.secteur, c.type, c.designation, c.localisation, c.unite, c.actif ? 'Oui' : 'Non'];
+    pers.forEach(k => { const r = g[k]; vals.push(!r ? '' : (r.index !== null ? r.index : (r.statut || ''))); });
+    row.values = vals;
+    for (let j = 1; j <= entete.length; j++) { const cell = row.getCell(j); cell.font = { size: 9 }; cell.border = BORD; if (j > FIX.length) cell.alignment = { horizontal: 'right' }; }
+    row.getCell(1).numFmt = '@';
+    pers.forEach((k, p) => {
+      const r = g[k]; if (!r) return;
+      const cell = row.getCell(FIX.length + 1 + p), ctrl = String(r.ctrl || '');
+      const signale = ctrl && !/Changement|confirmé/i.test(ctrl);
+      if (signale) cell.fill = fill('#fbf0d9'); else if (r.index === null) cell.fill = fill('#eeeeee');
+      const note = [ctrl, r.statut && r.statut !== 'OK' ? 'Statut : ' + r.statut : '', r.com ? 'Commentaire : ' + r.com : '',
+        r.qui ? 'Relevé par ' + r.qui + (r.date ? ' le ' + fr2(r.date) : '') : ''].filter(String).join('\n');
+      if (note) cell.note = note;
+    });
+  });
+  [55, 130, 45, 220, 220, 45, 45].forEach((w, i) => (sh.getColumn(i + 1).width = larg(w)));
+  for (let j = FIX.length + 1; j <= entete.length; j++) sh.getColumn(j).width = larg(78);
+  // Onglet Relevés
+  const sj = wb.addWorksheet('Relevés', { views: [{ state: 'frozen', ySplit: 1 }] });
+  const jh = ['Date relevé', 'Période', 'N°', 'Désignation', 'Localisation', 'Type', 'Index', 'Unité', 'Conso', 'Contrôle', 'Statut', 'Releveur', 'Commentaire', 'Index final ancien compteur'];
+  sj.getRow(1).values = jh; sj.getRow(1).eachCell(c => { c.font = { bold: true }; c.fill = fill('#e8f0fb'); });
+  rel.slice().sort((a, b) => (a.per - b.per) || String(a.num).localeCompare(String(b.num), 'fr', { numeric: true })).forEach((r, i) => {
+    const c = cm[r.num] || {}, row = sj.getRow(2 + i);
+    row.values = [r.date || '', lblMois(r.per), r.num, c.designation || '', c.localisation || '', c.type || '',
+      r.index === null ? '' : r.index, c.unite || '', r.conso === null ? '' : r.conso, r.ctrl || '', r.statut || '', r.qui || '', r.com || '', r.ancien === null ? '' : r.ancien];
+    row.font = { size: 9 }; row.getCell(1).numFmt = 'dd/mm/yyyy'; row.getCell(3).numFmt = '@';
+  });
+  [80, 80, 55, 220, 220, 45, 80, 45, 70, 160, 90, 110, 220, 90].forEach((w, i) => (sj.getColumn(i + 1).width = larg(w)));
+  const buf = await wb.xlsx.writeBuffer();
+  return { blob: new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), compteurs: cpt.length, mois: pers.length };
+}
+
 // ───────────────────────── Export de tous les index (Excel, emplacement au choix)
 // Version corrigée : si la fenêtre « Enregistrer sous » est bloquée (PC géré,
 // stratégie Chrome/Edge), on bascule automatiquement sur un téléchargement classique
 // (dossier Téléchargements) au lieu de s'arrêter sans rien afficher.
+window.cptExportIndexTest = async () => { await pretDocs; return fabriquerExportIndex(M.donneesExport(DOCS)); }; // contrôle sans téléchargement
 async function exporterIndex(){
   // Version 3 : le bouton réagit toujours. On prépare d'abord le fichier (≈ 15 s),
   // puis on affiche « Télécharger le fichier » : le téléchargement part d'un clic,
@@ -852,14 +935,12 @@ async function exporterIndex(){
   const b = $('#ex-open'), z = $('#ex-pick');
   const nom = 'Index compteurs Eurexpo - ' + isoD(new Date()) + '.xlsx';
   b.disabled = true; b.textContent = 'Export en cours…';
-  z.innerHTML = '<div class="muted" style="font-size:12.5px;margin-top:8px">Préparation du fichier Excel (environ 15 secondes)…</div>';
+  z.innerHTML = '<div class="muted" style="font-size:12.5px;margin-top:8px">Préparation du fichier Excel…</div>';
   const fin = () => { b.disabled = false; b.textContent = 'Exporter en Excel…'; };
   call('exporterIndex', [], r => {
     fin();
     try {
-      const bin = atob(r.b64), u = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-      const blob = new Blob([u], { type: r.mime });
+      const blob = r.blob;
       const url = URL.createObjectURL(blob);
       z.innerHTML = '<div class="fb ok dv-ok">✓ Fichier prêt (' + r.compteurs + ' compteurs · ' + r.mois + ' mois)</div>'
         + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'
