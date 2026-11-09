@@ -833,7 +833,9 @@ let jspdfP = null;
 const chargerJsPDF = () => (jspdfP = jspdfP || import('https://cdn.jsdelivr.net/npm/jspdf@2.5.2/+esm').then(m => m.jsPDF || (m.default && m.default.jsPDF)).catch(() => { jspdfP = null; throw new Error('Module PDF non chargé (connexion ?)'); }));
 const DV_COUL = { ELECTRICITE: '#F2B51E', 'EAU FROIDE BRUTE': '#5B9BD5', 'EAU FROIDE ADOUCIE': '#5B9BD5', 'EAU CHAUDE ADOUCIE': '#5B9BD5', GAZ: '#9E9E9E' };
 const DV_FOND = { ELECTRICITE: '#FFF4C7', 'EAU FROIDE BRUTE': '#DCEBFB', 'EAU FROIDE ADOUCIE': '#DCEBFB', 'EAU CHAUDE ADOUCIE': '#DCEBFB', GAZ: '#E7E7E7' };
-const dvNb = (n, d) => (n === null || n === undefined || n === '' || isNaN(n)) ? '' : Number(n).toLocaleString('fr-FR', { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 }).replace(/[  ]/g, ' ');
+// même arrondi que l'ancien devis (toFixed), séparateur de milliers en espace
+const dvNb = (n, d) => { if (n === null || n === undefined || n === '' || isNaN(n)) return '';
+  const [e, f] = Math.abs(Number(n)).toFixed(d || 0).split('.'); return (Number(n) < 0 ? '-' : '') + e.replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + (f ? ',' + f : ''); };
 const dvE = (n, d) => dvNb(n, d === undefined ? 2 : d) + ' €';
 const dvPt = s => String(s == null ? '' : s).replace(/[  ]/g, ' ').replace(/[’]/g, "'");
 const dvTarifsTxt = t => 'Tarifs appliqués : électricité ' + dvE(t.elec, 4) + ' HT/kWh · eau froide brute ' + dvE(t.eau) + ' HT/m³ · eau froide adoucie '
