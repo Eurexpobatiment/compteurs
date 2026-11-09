@@ -258,7 +258,7 @@ let tt; function toast(m){ const t = $('#toast'); t.textContent = m; t.classList
    Compteurs et relevés : collection CptCompteurs (un document par compteur, ses relevés dans le champ r)
    Devis : CptConfig/devis (tarifs, compteurs facturés) et CptConfig/registre (devis édités).
    Lecture libre ; écriture après connexion anonyme (automatique, sans compte).
-   Les PDF / Excel (devis, export des index) sont toujours fabriqués par le script Google, à partir des données envoyées. */
+   Les PDF / Excel (devis, export des index) sont fabriqués dans la page (jsPDF, ExcelJS) : plus de script Google. */
 const FIREBASE = {
   apiKey: "AIzaSyARtP0RMkulG6c53-bnazwpGTspl0LgAhk", // clé publique (faite pour être dans la page)
   authDomain: "equipe-batiment.firebaseapp.com",
@@ -268,7 +268,6 @@ const FIREBASE = {
   appId: "1:408022301135:web:69dee0a5fb479154657aba"
 };
 const FBV = "10.14.1";
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwuL9955qHZxwgy1Q3HQ7IiJbqmKifxTmIbwQi0jBAtIv6w_LfJe0jfJR1SsKdrxJm3/exec";
 const [{ initializeApp }, A, F] = await Promise.all([
   import(`https://www.gstatic.com/firebasejs/${FBV}/firebase-app.js`),
   import(`https://www.gstatic.com/firebasejs/${FBV}/firebase-auth.js`),
@@ -317,15 +316,6 @@ let gotDevis = false, gotReg = false;
 F.onSnapshot(F.doc(db, 'CptConfig', 'devis'), s => { CONFIG = s.exists() ? s.data() : {}; gotDevis = true; if (gotReg) pretCfg(); }, () => {});
 F.onSnapshot(F.doc(db, 'CptConfig', 'registre'), s => { REGISTRE = s.exists() ? s.data() : { liste: [] }; if (!Array.isArray(REGISTRE.liste)) REGISTRE.liste = []; gotReg = true; if (gotDevis) pretCfg(); }, () => {});
 
-/* Script Google : fabrique les PDF / Excel (rien n'est enregistré dans Drive) */
-async function script(fn, args) {
-  if (navigator.onLine === false) throw new Error('Pas de connexion : l\'édition des fichiers demande internet.');
-  let r;
-  try { r = await fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: fn, args: args || [] }) }).then(x => x.json()); }
-  catch (e) { throw new Error('Connexion au script Google impossible (' + (e && e.message || e) + ')'); }
-  if (!r || !r.ok) throw new Error(r && r.error || 'Réponse invalide du script Google');
-  return r.data;
-}
 
 const API = {
   getInit: async () => { await pretDocs; if (!DOCS.length) throw new Error('Aucun compteur dans Firebase (copie du classeur pas encore faite).'); return M.getInit(DOCS); },
@@ -391,7 +381,7 @@ const API = {
     const now = new Date();
     d.dateDevis = String(now.getDate()).padStart(2, '0') + '/' + String(now.getMonth() + 1).padStart(2, '0') + '/' + now.getFullYear();
     let f;
-    try { f = await script('fbDevisFichiers', [d]); }
+    try { f = await dvFichiers(d); }
     catch (e) { // fichiers non fabriqués : le numéro est rendu
       F.runTransaction(db, async tx => {
         const s = await tx.get(regRef); const liste = (s.exists() && s.data().liste || []).filter(x => x.numero !== d.numero); tx.set(regRef, { liste });
@@ -767,9 +757,7 @@ function dvEditer(b, ko){
 }
 function dvDl(f){
   try {
-    const bin = atob(f.b64), u = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-    const url = URL.createObjectURL(new Blob([u], { type: f.mime }));
+    const url = URL.createObjectURL(f.blob);
     const a = document.createElement('a'); a.href = url; a.download = f.name; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   } catch (e) { window.open(f.url, '_blank'); }
@@ -839,6 +827,162 @@ function renderEau(d, root){
   h += '</tbody></table></div></div>';
   root.innerHTML = h;
 }
+
+// ───────────────────────── Devis : PDF (jsPDF) et Excel (ExcelJS) fabriqués dans la page, même trame qu'avant. Plus de script Google.
+let jspdfP = null;
+const chargerJsPDF = () => (jspdfP = jspdfP || import('https://cdn.jsdelivr.net/npm/jspdf@2.5.2/+esm').then(m => m.jsPDF || (m.default && m.default.jsPDF)).catch(() => { jspdfP = null; throw new Error('Module PDF non chargé (connexion ?)'); }));
+const DV_COUL = { ELECTRICITE: '#F2B51E', 'EAU FROIDE BRUTE': '#5B9BD5', 'EAU FROIDE ADOUCIE': '#5B9BD5', 'EAU CHAUDE ADOUCIE': '#5B9BD5', GAZ: '#9E9E9E' };
+const DV_FOND = { ELECTRICITE: '#FFF4C7', 'EAU FROIDE BRUTE': '#DCEBFB', 'EAU FROIDE ADOUCIE': '#DCEBFB', 'EAU CHAUDE ADOUCIE': '#DCEBFB', GAZ: '#E7E7E7' };
+const dvNb = (n, d) => (n === null || n === undefined || n === '' || isNaN(n)) ? '' : Number(n).toLocaleString('fr-FR', { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 }).replace(/[  ]/g, ' ');
+const dvE = (n, d) => dvNb(n, d === undefined ? 2 : d) + ' €';
+const dvPt = s => String(s == null ? '' : s).replace(/[  ]/g, ' ').replace(/[’]/g, "'");
+const dvTarifsTxt = t => 'Tarifs appliqués : électricité ' + dvE(t.elec, 4) + ' HT/kWh · eau froide brute ' + dvE(t.eau) + ' HT/m³ · eau froide adoucie '
+  + dvE(t.eau * t.coefAdoucie) + ' HT/m³ (× ' + dvNb(t.coefAdoucie, 2) + ') · eau chaude adoucie ' + dvE(t.eau * t.coefChaude) + ' HT/m³ (× ' + dvNb(t.coefChaude, 2)
+  + ') · gaz ' + dvE(t.gaz, 4) + ' HT/kWh (conversion ' + dvNb(t.convGaz, 2) + ' kWh/m³).';
+const DV_NOTE = "Quantités = (index actuel − index précédent) × coefficient, d'après les relevés mensuels de compteurs d'Eurexpo Lyon.";
+async function dvLogo() {
+  const im = document.querySelector('header.top img');
+  if (!im || !/^data:image\/png/.test(im.src)) return null;
+  return { data: im.src, w: im.naturalWidth || 700, h: im.naturalHeight || 109 };
+}
+const hexRgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+
+async function dvPdfPage(d) {
+  const [jsPDF, logo] = await Promise.all([chargerJsPDF(), dvLogo()]);
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+  const W = 297, H = 210, M = 12, CW = W - 2 * M;
+  const BLEU = [47, 116, 208], INK = [24, 24, 27], GRIS = [100, 100, 110], LIGNE = [220, 224, 230];
+  let y = 10;
+  if (logo) { const h = 13, w = h * logo.w / logo.h; doc.addImage(logo.data, 'PNG', M, y, w, h); }
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(...BLEU); doc.text('DEVIS', W - M, y + 7, { align: 'right' });
+  doc.setFontSize(9); doc.setTextColor(...INK); const n = 'N° ' + d.numero; const suf = ' · ' + d.dateDevis;
+  doc.setFont('helvetica', 'normal'); const wS = doc.getTextWidth(suf); doc.text(suf, W - M, y + 13, { align: 'right' });
+  doc.setFont('helvetica', 'bold'); doc.text(dvPt(n), W - M - wS, y + 13, { align: 'right' });
+  y += 17; doc.setDrawColor(...BLEU); doc.setLineWidth(0.7); doc.line(M, y, W - M, y); y += 3;
+  // Bandeau client / période / objet
+  const bw = CW / 3 - 2, bh = 18;
+  [['CLIENT', d.client, ''], ['PÉRIODE DE CONSOMMATION', d.perLbl, d.dateReleve ? 'Relevés effectués par DALKIA le ' + d.dateReleve : ''], ['OBJET', '', '']].forEach((b, i) => {
+    const x = M + i * (bw + 3);
+    doc.setDrawColor(...LIGNE); doc.setLineWidth(0.3); doc.rect(x, y, bw, bh);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(...GRIS); doc.text(b[0], x + 2.5, y + 4);
+    if (i < 2) { doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(...INK); doc.text(dvPt(b[1]), x + 2.5, y + 8.5);
+      if (b[2]) { doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.text(dvPt(b[2]), x + 2.5, y + 12); } }
+    else { doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5); doc.setTextColor(...INK); doc.text(doc.splitTextToSize(dvPt(d.objet), bw - 5).slice(0, 3), x + 2.5, y + 8.5); }
+  });
+  y += bh + 5;
+  // Tableau
+  const cols = [{ t: 'LIEU', w: 46 }, { t: 'CATÉGORIE', w: 52 }, { t: 'INDEX PRÉCÉDENT', w: 32, r: 1 }, { t: 'INDEX ACTUEL', w: 30, r: 1 }, { t: 'QUANTITÉ', w: 24, r: 1 },
+    { t: 'UNITÉ', w: 13 }, { t: 'P.U. HT', w: 22, r: 1 }, { t: 'TOTAL HT', w: 25, r: 1 }];
+  cols.push({ t: 'SOUS-TOTAL', w: CW - cols.reduce((s, c) => s + c.w, 0), r: 1 });
+  const xs = []; cols.reduce((x, c) => (xs.push(x), x + c.w), M);
+  const txt = (s, i, yy, al) => { const c = cols[i]; if (c.r && al !== 'l') doc.text(s, xs[i] + c.w - 1.5, yy, { align: 'right' }); else doc.text(s, xs[i] + 1.5, yy); };
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(...BLEU);
+  cols.forEach((c, i) => txt(c.t, i, y, i === 8 ? 'l' : undefined)); y += 1.8;
+  doc.setDrawColor(...BLEU); doc.setLineWidth(0.5); doc.line(M, y, W - M, y); y += 0.3;
+  const RH = 4.6;
+  const nbl = d.lieux.reduce((s, L) => s + L.lignes.length, 0);
+  const rh = Math.min(RH, (H - y - 52) / Math.max(1, nbl));
+  d.lieux.forEach(L => {
+    const y0 = y, hL = L.lignes.length * rh;
+    L.lignes.forEach(l => {
+      const yy = y + rh * 0.72;
+      doc.setFillColor(...hexRgb(DV_COUL[l.cat] || '#9E9E9E')); doc.rect(xs[1], y, 0.9, rh, 'F');
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...INK);
+      txt(dvPt(l.cat), 1, yy); txt(dvNb(l.iPrev), 2, yy); txt(dvNb(l.iCur), 3, yy); txt(dvNb(l.qte, 2), 4, yy); txt(l.unite, 5, yy);
+      txt(dvE(l.pu, l.unite === 'kWh' ? 4 : 2), 6, yy); txt(dvE(l.total), 7, yy);
+      y += rh; doc.setDrawColor(...LIGNE); doc.setLineWidth(0.15); doc.line(xs[1], y, xs[8], y);
+    });
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(...INK);
+    const lt = doc.splitTextToSize(dvPt(L.lieu), cols[0].w - 3); doc.text(lt, xs[0] + 1.5, y0 + hL / 2 - (lt.length - 1) * 1.4 + 1);
+    doc.setTextColor(...BLEU); doc.text(dvE(L.sousTotal), W - M - 1.5, y0 + hL / 2 + 1, { align: 'right' });
+    doc.setDrawColor(...LIGNE); doc.setLineWidth(0.3); doc.line(M, y, W - M, y);
+  });
+  // Totaux
+  y += 5; const xl = W - M - 70, xr = W - M - 1.5;
+  const tot = (lab, val, bold, coul) => {
+    doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(10); doc.setTextColor(...(coul || INK)); doc.text(lab, xl, y);
+    doc.setFont('helvetica', 'bold'); doc.text(val, xr, y, { align: 'right' }); y += 2.5;
+    doc.setDrawColor(...(coul || LIGNE)); doc.setLineWidth(coul ? 0.6 : 0.2); doc.line(xl - 2, y, W - M, y); y += 5.5;
+  };
+  tot('Total HT', dvE(d.totalHT), false); tot('TVA ' + dvNb(d.tarifs.tva, 1) + ' %', dvE(d.tva), false); tot('Total TTC', dvE(d.totalTTC), true, BLEU);
+  // Pied
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(...GRIS);
+  const pied = doc.splitTextToSize(dvPt(dvTarifsTxt(d.tarifs)), CW).concat([dvPt(DV_NOTE)]);
+  doc.text(pied, M, Math.max(y + 2, H - 12 - pied.length * 3));
+  return doc.output('blob');
+}
+
+async function dvXlsxPage(d) {
+  const ExcelJS = await chargerExcelJS();
+  const wb = new ExcelJS.Workbook(); wb.creator = 'Relevés compteurs – Eurexpo';
+  const ws = wb.addWorksheet('Devis', { views: [{ showGridLines: false }], pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
+  const fill = c => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + c.replace('#', '') } });
+  const BLEU = '2F74D0', thin = { style: 'thin', color: { argb: 'FFE4E4E0' } }, B = { top: thin, left: thin, bottom: thin, right: thin };
+  [23.9, 25.1, 13.3, 13.3, 12, 7, 12, 13.3, 13.9].forEach((w, i) => (ws.getColumn(i + 1).width = w));
+  ws.getRow(1).height = 39;
+  const logo = await dvLogo();
+  if (logo) ws.addImage(wb.addImage({ base64: logo.data.split(',')[1], extension: 'png' }), { tl: { col: 0, row: 0 }, ext: { width: Math.round(46 * logo.w / logo.h), height: 46 } });
+  ws.mergeCells('H1:I1'); Object.assign(ws.getCell('H1'), { value: 'DEVIS' }); ws.getCell('H1').font = { bold: true, size: 20, color: { argb: 'FF' + BLEU } }; ws.getCell('H1').alignment = { horizontal: 'right', vertical: 'middle' };
+  ws.mergeCells('G2:I2'); ws.getCell('G2').value = 'N° ' + d.numero + ' · ' + d.dateDevis; ws.getCell('G2').alignment = { horizontal: 'right' };
+  const lab = (a, t) => { ws.getCell(a).value = t; ws.getCell(a).font = { color: { argb: 'FF6B6B70' }, size: 9 }; };
+  lab('A5', 'Client'); ws.getCell('B5').value = d.client; ws.getCell('B5').font = { bold: true };
+  lab('A6', 'Période'); ws.getCell('B6').value = d.perLbl + (d.dateReleve ? '   (relevés effectués par DALKIA le ' + d.dateReleve + ')' : ''); ws.getCell('B6').font = { bold: true };
+  lab('A7', 'Objet'); ws.getCell('B7').value = d.objet;
+  // Tarifs (cellules jaunes modifiables : les formules du tableau s'y réfèrent)
+  ws.mergeCells('F5:I5'); ws.getCell('F5').value = 'Tarifs appliqués'; ws.getCell('F5').font = { bold: true }; ws.getCell('F5').fill = fill('#E8F0FB');
+  const t = d.tarifs;
+  [['Électricité (€ HT/kWh)', t.elec, '0.0000 "€"'], ['Eau froide brute (€ HT/m³)', t.eau, '0.00 "€"'], ['Coef. eau froide adoucie', t.coefAdoucie, '0.00'],
+   ['Coef. eau chaude adoucie', t.coefChaude, '0.00'], ['Gaz (€ HT/kWh)', t.gaz, '0.0000 "€"'], ['Conversion gaz (kWh/m³)', t.convGaz, '0.00'], ['TVA (%)', t.tva, '0.0']]
+    .forEach((r, i) => { const R = 6 + i; ws.mergeCells('F' + R + ':H' + R); ws.getCell('F' + R).value = r[0]; ws.getCell('F' + R).font = { size: 9 };
+      const c = ws.getCell('I' + R); c.value = r[1]; c.numFmt = r[2]; c.fill = fill('#FFF8E1'); c.border = B; });
+  // Tableau
+  const H0 = 14; const hr = ws.getRow(H0);
+  hr.values = ['Lieu', 'Catégorie', 'Index précédent', 'Index actuel', 'Quantité', 'Unité', 'P.U. HT', 'Total HT', 'Sous-total'];
+  hr.eachCell(c => { c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = fill('#' + BLEU); c.alignment = { vertical: 'middle', wrapText: true }; });
+  const PU = { ELECTRICITE: '$I$6', 'EAU FROIDE BRUTE': '$I$7', 'EAU FROIDE ADOUCIE': '$I$7*$I$8', 'EAU CHAUDE ADOUCIE': '$I$7*$I$9', GAZ: '$I$10' };
+  let r = H0 + 1; const premiere = r;
+  d.lieux.forEach(L => {
+    const r0 = r;
+    L.lignes.forEach(l => {
+      const row = ws.getRow(r);
+      row.getCell(1).value = L.lieu;
+      row.getCell(2).value = l.cat; row.getCell(2).fill = fill(DV_FOND[l.cat] || '#E7E7E7');
+      row.getCell(3).value = l.iPrev; row.getCell(4).value = l.iCur;
+      const conv = l.cat === 'GAZ' ? (t.convGaz || 1) : 1, calc = (Number(l.iCur) - Number(l.iPrev)) * (l.coef || 1) * conv;
+      row.getCell(5).value = (l.iPrev != null && l.iCur != null && Math.abs(calc - l.qte) < 0.01)
+        ? { formula: '(D' + r + '-C' + r + ')*' + (l.coef || 1) + (l.cat === 'GAZ' ? '*$I$11' : ''), result: l.qte } : l.qte;
+      row.getCell(6).value = l.unite;
+      row.getCell(7).value = { formula: PU[l.cat] || String(l.pu), result: l.pu };
+      row.getCell(8).value = { formula: 'ROUND(E' + r + '*G' + r + ',2)', result: l.total };
+      row.getCell(3).numFmt = row.getCell(4).numFmt = '#,##0'; row.getCell(5).numFmt = '#,##0.00';
+      row.getCell(7).numFmt = '#,##0.0000 "€"'; row.getCell(8).numFmt = '#,##0.00 "€"';
+      for (let j = 1; j <= 9; j++) row.getCell(j).border = B;
+      if (l.notes) row.getCell(2).note = l.notes;
+      r++;
+    });
+    ws.mergeCells('A' + r0 + ':A' + (r - 1)); ws.mergeCells('I' + r0 + ':I' + (r - 1));
+    const a = ws.getCell('A' + r0); a.font = { bold: true }; a.fill = fill('#E8F0FB'); a.alignment = { vertical: 'middle', wrapText: true };
+    const s = ws.getCell('I' + r0); s.value = { formula: 'SUM(H' + r0 + ':H' + (r - 1) + ')', result: L.sousTotal }; s.font = { bold: true }; s.fill = fill('#E8F0FB');
+    s.numFmt = '#,##0.00 "€"'; s.alignment = { vertical: 'middle' };
+  });
+  const derniere = r - 1; r++;
+  const tot = (label, f, res, fort) => { ws.mergeCells('G' + r + ':H' + r); const g = ws.getCell('G' + r); g.value = label;
+    const c = ws.getCell('I' + r); c.value = { formula: f, result: res }; c.numFmt = '#,##0.00 "€"';
+    if (fort) { [g, c].forEach(x => { x.font = { bold: true, color: { argb: 'FFFFFFFF' } }; x.fill = fill('#' + BLEU); }); } else c.font = { bold: true }; r++; };
+  const rHT = r; tot('Total HT', 'SUM(I' + premiere + ':I' + derniere + ')', d.totalHT);
+  const rTVA = r; ws.mergeCells('G' + r + ':H' + r); ws.getCell('G' + r).value = { formula: '"TVA "&$I$12&" %"', result: 'TVA ' + t.tva + ' %' };
+  ws.getCell('I' + r).value = { formula: 'I' + rHT + '*$I$12/100', result: d.tva }; ws.getCell('I' + r).numFmt = '#,##0.00 "€"'; r++;
+  tot('Total TTC', 'I' + rHT + '+I' + rTVA, d.totalTTC, true);
+  r++; ws.mergeCells('A' + r + ':I' + r); ws.getCell('A' + r).value = DV_NOTE; ws.getCell('A' + r).font = { size: 8, color: { argb: 'FF6B6B70' } };
+  const buf = await wb.xlsx.writeBuffer();
+  return new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+async function dvFichiers(d) {
+  const base = (d.numero + ' – ' + d.client + ' – ' + d.perLbl).replace(/[\\/:*?"<>|]/g, '-');
+  const [pdf, xlsx] = await Promise.all([dvPdfPage(d), dvXlsxPage(d)]);
+  return { pdf: { name: base + '.pdf', mime: 'application/pdf', blob: pdf }, xlsx: { name: base + '.xlsx', mime: xlsx.type, blob: xlsx } };
+}
+window.cptDevisTest = dvFichiers; // contrôle : fabrique les fichiers sans les télécharger
 
 // ───────────────────────── Export Excel de tous les index : fabriqué dans la page (ExcelJS), plus de classeur temporaire dans Drive
 let excelP = null;
