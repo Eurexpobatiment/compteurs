@@ -284,6 +284,28 @@ let auth; try { auth = A.initializeAuth(fbApp, { persistence: [A.browserLocalPer
 let db;
 try { db = F.initializeFirestore(fbApp, { localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }) }); }
 catch (e) { db = F.getFirestore(fbApp); } /* navigation privée : pas de copie sur l'appareil */
+/* Écoute en direct qui ne lâche pas : après un refus passager (jeton de connexion expiré pendant que l'onglet
+   était en arrière-plan, réseau…) on renouvelle le jeton et on réécoute, de plus en plus espacé, et tout de suite
+   au retour sur l'onglet. L'erreur n'est signalée qu'au 3e échec d'affilée. */
+function onSnap(ref, ...args) {
+  const opts = (args[0] && typeof args[0] === 'object') ? args.shift() : {};
+  const next = args[0], err = args[1] || (() => {});
+  let un = null, fini = false, n = 0, t = 0;
+  const go = () => {
+    if (fini) return;
+    un = F.onSnapshot(ref, opts, s => { n = 0; next(s); }, e => {
+      un = null; n++;
+      if ((e.code === 'permission-denied' || e.code === 'unauthenticated') && auth && auth.currentUser) auth.currentUser.getIdToken(true).catch(() => {});
+      if (n === 3) err(e);
+      t = setTimeout(go, Math.min(30000, 1000 * 2 ** Math.min(n, 5)));
+    });
+  };
+  const vis = () => { if (!document.hidden && !un && !fini) { clearTimeout(t); go(); } };
+  document.addEventListener('visibilitychange', vis);
+  go();
+  return () => { fini = true; clearTimeout(t); document.removeEventListener('visibilitychange', vis); if (un) un(); };
+}
+
 
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const withTimeout = (p, ms, msg) => Promise.race([p, wait(ms).then(() => { throw new Error(msg); })]);
@@ -304,7 +326,7 @@ let DOCS = [], CONFIG = {}, REGISTRE = { liste: [] }, horsLigne = false;
 let pretCpt, pretCfg;
 const pretDocs = new Promise(res => pretCpt = res), pretConfig = new Promise(res => pretCfg = res);
 const ref = id => F.doc(db, 'CptCompteurs', id);
-F.onSnapshot(F.collection(db, 'CptCompteurs'), { includeMetadataChanges: true }, s => {
+onSnap(F.collection(db, 'CptCompteurs'), { includeMetadataChanges: true }, s => {
   DOCS = s.docs.map(d => Object.assign({ id: d.id }, d.data()));
   horsLigne = s.metadata.fromCache;
   const n = s.docs.filter(d => d.metadata.hasPendingWrites).length;
@@ -313,8 +335,8 @@ F.onSnapshot(F.collection(db, 'CptCompteurs'), { includeMetadataChanges: true },
   if (DOCS.length || !horsLigne) pretCpt();
 }, e => { $('#loading').innerHTML = '<div class="empty">Impossible de lire les compteurs.<br>' + esc(fbErr(e)) + '</div>'; });
 let gotDevis = false, gotReg = false;
-F.onSnapshot(F.doc(db, 'CptConfig', 'devis'), s => { CONFIG = s.exists() ? s.data() : {}; gotDevis = true; if (gotReg) pretCfg(); }, () => {});
-F.onSnapshot(F.doc(db, 'CptConfig', 'registre'), s => { REGISTRE = s.exists() ? s.data() : { liste: [] }; if (!Array.isArray(REGISTRE.liste)) REGISTRE.liste = []; gotReg = true; if (gotDevis) pretCfg(); }, () => {});
+onSnap(F.doc(db, 'CptConfig', 'devis'), s => { CONFIG = s.exists() ? s.data() : {}; gotDevis = true; if (gotReg) pretCfg(); }, () => {});
+onSnap(F.doc(db, 'CptConfig', 'registre'), s => { REGISTRE = s.exists() ? s.data() : { liste: [] }; if (!Array.isArray(REGISTRE.liste)) REGISTRE.liste = []; gotReg = true; if (gotDevis) pretCfg(); }, () => {});
 
 
 const API = {
